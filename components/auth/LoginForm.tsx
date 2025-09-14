@@ -59,7 +59,7 @@ export function LoginForm() {
             <Building2 className="w-8 h-8 text-blue-600" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
-          <p className="text-gray-500">Sign in to your tenant account</p>
+          <p className="text-gray-500">Sign in to your account</p>
         </div>
 
         <Card className="border-0 shadow-xl">
