@@ -1,8 +1,8 @@
+// app/notes/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,74 +28,85 @@ import {
   Building2,
   LogOut,
   Settings,
-  User as UserIcon,
   Crown,
   Zap,
-  Loader2
+  Loader2,
+  Edit
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useToast } from '@/hooks/use-toast'; // Import useToast
 
-// Define types for Note, User, Tenant based on your models
 interface Note {
   _id: string;
   title: string;
   content: string;
   tenant: string;
-  author: string;
+  author: {
+    _id: string;
+    name?: string;
+    email: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
 
-interface Tenant {
-  _id: string;
-  name: string;
-  slug: string;
-  plan: 'Free' | 'Pro';
-  // Add other tenant properties if needed, like maxNotes if it's part of the client-side tenant object
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role: 'Admin' | 'Member';
+  tenant: {
+    _id: string;
+    name: string;
+    slug: string;
+    plan: 'Free' | 'Pro';
+  };
 }
 
 export default function NotesPage() {
-  const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast(); // Initialize useToast
 
+  const [user, setUser] = useState<User | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
   const [notesLoading, setNotesLoading] = useState(true);
+  const [upgrading, setUpgrading] = useState(false);
+  const [requestingUpgrade, setRequestingUpgrade] = useState(false);
 
-  useEffect(() => {
-    if (status === 'loading') return;
+  // Get auth headers for API requests
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  }, []);
 
-    if (status === 'unauthenticated') {
-      router.push('/login');
-      return;
-    }
-
-    if (session?.user) {
-      // Fetch tenant details if needed, or rely on session.user.tenant if it contains enough info
-      // For now, let's assume session.user.tenant has the basic info needed
-      // If you need more tenant details (like maxNotes), you'd fetch it from /api/tenants/:slug
-      const userTenant = session.user.tenant as Tenant; // Cast to Tenant type
-      setTenant(userTenant);
-      loadNotes();
-    }
-  }, [session, status, router]);
-
-  const loadNotes = async () => {
+  const loadNotes = useCallback(async () => {
     setNotesLoading(true);
     try {
-      const response = await fetch('/api/notes');
+      const response = await fetch('/api/notes', {
+        headers: getAuthHeaders()
+      });
+
+      if (response.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return;
+      }
+
       const data = await response.json();
 
       if (response.ok && data.success) {
         setNotes(data.notes);
-      } else if (response.status === 401) {
-        signOut({ callbackUrl: '/login' }); // Redirect to login on unauthorized
       } else {
         setError(data.error || 'Failed to load notes');
       }
@@ -105,7 +116,27 @@ export default function NotesPage() {
     } finally {
       setNotesLoading(false);
     }
-  };
+  }, [getAuthHeaders, router]);
+
+  useEffect(() => {
+    // Check authentication on component mount
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+
+    if (!token || !userData) {
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData) as User;
+      setUser(parsedUser);
+      loadNotes();
+    } catch (err) {
+      console.error('Error parsing user data:', err);
+      router.push('/login');
+    }
+  }, [router, loadNotes]);
 
   const filteredNotes = notes.filter(note =>
     note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -114,94 +145,211 @@ export default function NotesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch('/api/notes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      let response;
+      if (editingNote) {
+        response = await fetch(`/api/notes/${editingNote._id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(formData),
+        });
+      } else {
+        response = await fetch('/api/notes', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(formData),
+        });
+      }
+
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setNotes(prev => [data.note, ...prev]);
+        if (editingNote) {
+          setNotes(prev => prev.map(n => n._id === data.note._id ? data.note : n));
+        } else {
+          setNotes(prev => [data.note, ...prev]);
+        }
         setFormData({ title: '', content: '' });
         setIsCreateDialogOpen(false);
+        setEditingNote(null);
+        toast({
+          title: editingNote ? "Note updated!" : "Note created!",
+          description: editingNote ? "Your note has been updated." : "Your new note has been saved.",
+        });
       } else if (response.status === 403) {
-        setError(data.error || 'Note limit reached.');
+        setError(data.error || 'Note limit reached. Please upgrade to Pro plan.');
+        toast({
+          title: "Note Limit Reached",
+          description: data.error || "You have reached the maximum number of notes for your Free plan. Please upgrade to Pro.",
+          variant: "destructive",
+        });
       } else {
-        setError(data.error || 'Failed to create note');
+        setError(data.error || 'Failed to save note');
+        toast({
+          title: "Error",
+          description: data.error || 'Failed to save note.',
+          variant: "destructive",
+        });
       }
     } catch (err) {
-      console.error('Error creating note:', err);
-      setError('Failed to create note. Please try again.');
+      console.error('Error saving note:', err);
+      setError('Failed to save note. Please try again.');
+      toast({
+        title: "Error",
+        description: "Could not connect to the server to save note.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleEdit = (note: Note) => {
+    setEditingNote(note);
+    setFormData({ title: note.title, content: note.content });
+    setIsCreateDialogOpen(true);
+  };
+
   const handleDelete = async (noteId: string) => {
+    if (!user) return;
+    
     setLoading(true);
     try {
       const response = await fetch(`/api/notes/${noteId}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
+
       const data = await response.json();
 
       if (response.ok && data.success) {
         setNotes(prev => prev.filter(n => n._id !== noteId));
+        toast({
+          title: "Note deleted!",
+          description: "The note has been successfully deleted.",
+        });
       } else {
         setError(data.error || 'Failed to delete note');
+        toast({
+          title: "Error",
+          description: data.error || 'Failed to delete note.',
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error('Error deleting note:', err);
       setError('Failed to delete note. Please try again.');
+      toast({
+        title: "Error",
+        description: "Could not connect to the server to delete note.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpgrade = async () => {
-    if (!tenant) return;
+  // Admin-only direct upgrade
+  const handleAdminUpgrade = async () => {
+    if (!user || user.role !== 'Admin' || !user.tenant?.slug) return;
 
     setUpgrading(true);
     try {
-      const response = await fetch(`/api/tenants/${tenant.slug}/upgrade`, {
+      const response = await fetch(`/api/tenants/${user.tenant.slug}/upgrade`, {
         method: 'POST',
+        headers: getAuthHeaders(),
       });
+
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setTenant(prev => (prev ? { ...prev, plan: 'Pro' } : null));
-        // Optionally, re-fetch notes to ensure any limits are immediately reflected
-        loadNotes();
-        router.refresh(); // Refresh the session to get the new plan
+        const updatedUser = {
+          ...user,
+          tenant: { ...user.tenant, plan: 'Pro' as const }
+        };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        loadNotes(); // Reload notes to reflect new limits
+        toast({
+          title: "Tenant Upgraded!",
+          description: "Your tenant has been successfully upgraded to the Pro plan.",
+        });
       } else {
-        setError(data.error || 'Failed to upgrade');
+        setError(data.error || 'Failed to upgrade tenant');
+        toast({
+          title: "Upgrade Failed",
+          description: data.error || 'Failed to upgrade tenant.',
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error('Error upgrading tenant:', err);
       setError('Failed to upgrade. Please try again.');
+      toast({
+        title: "Error",
+        description: "Could not connect to the server to upgrade tenant.",
+        variant: "destructive",
+      });
     } finally {
       setUpgrading(false);
     }
   };
 
+  // User-initiated upgrade request
+  const handleRequestUpgrade = async () => {
+    if (!user || !user.tenant?.slug) return;
+
+    setRequestingUpgrade(true);
+    try {
+      const response = await fetch(`/api/tenants/${user.tenant.slug}/request-upgrade`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: "Upgrade Request Sent!",
+          description: "Your upgrade request has been sent to the admin.",
+        });
+      } else {
+        toast({
+          title: "Request Failed",
+          description: data.error || 'Failed to send upgrade request.',
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error('Error requesting upgrade:', err);
+      toast({
+        title: "Error",
+        description: "Could not connect to the server to send upgrade request.",
+        variant: "destructive",
+      });
+    } finally {
+      setRequestingUpgrade(false);
+    }
+  };
+
   const handleLogout = () => {
-    signOut({ callbackUrl: '/login' });
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    router.push('/login');
   };
 
   const resetForm = () => {
     setFormData({ title: '', content: '' });
+    setEditingNote(null);
     setError('');
   };
 
-  // Show loading state for notes or initial session loading
-  if (status === 'loading' || notesLoading || !session?.user || !tenant) {
+  if (notesLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex items-center space-x-2 text-gray-500">
@@ -212,12 +360,12 @@ export default function NotesPage() {
     );
   }
 
-  // Assuming tenant.maxNotes is available from the session or fetched tenant object
-  // If not, you might need to fetch full tenant details or define a default maxNotes for Free plan
-  const maxNotesForFreePlan = 3; // Define the limit for Free plan
-  const currentMaxNotes = tenant.plan === 'Pro' ? -1 : maxNotesForFreePlan; // -1 for unlimited
-  const canCreateNote = tenant.plan === 'Pro' || notes.length < currentMaxNotes;
-  const shouldShowUpgrade = tenant.plan === 'Free' && notes.length >= currentMaxNotes;
+  const maxNotesForFreePlan = 3;
+  const canCreateNote = user.tenant.plan === 'Pro' || notes.length < maxNotesForFreePlan;
+  const shouldShowUpgradeUI = user.tenant.plan === 'Free' && notes.length >= maxNotesForFreePlan;
+
+  const upgradeButtonHandler = user.role === 'Admin' ? handleAdminUpgrade : handleRequestUpgrade;
+  const upgradeButtonLoading = user.role === 'Admin' ? upgrading : requestingUpgrade;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -227,25 +375,24 @@ export default function NotesPage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold shadow-lg"
-                style={{ backgroundColor: '#3B82F6' }} // Placeholder color, ideally from tenant object
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold shadow-lg bg-blue-600"
               >
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">{tenant.name}</h1>
+                <h1 className="text-xl font-semibold text-gray-900">{user.tenant.name}</h1>
                 <div className="flex items-center space-x-2">
                   <Badge
-                    variant={tenant.plan === 'Pro' ? 'default' : 'secondary'}
+                    variant={user.tenant.plan === 'Pro' ? 'default' : 'secondary'}
                     className="text-xs"
                   >
-                    {tenant.plan === 'Pro' ? (
+                    {user.tenant.plan === 'Pro' ? (
                       <><Crown className="w-3 h-3 mr-1" />Pro</>
                     ) : (
                       'Free'
                     )}
                   </Badge>
-                  {tenant.plan === 'Free' && (
+                  {user.tenant.plan === 'Free' && (
                     <span className="text-xs text-gray-500">
                       {notes.length}/{maxNotesForFreePlan} notes used
                     </span>
@@ -260,12 +407,12 @@ export default function NotesPage() {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-blue-100 text-blue-700 text-sm">
-                        {session.user.name ? session.user.name.split(' ').map(n => n[0]).join('').toUpperCase() : session.user.email[0].toUpperCase()}
+                        {user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : user.email[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="text-left hidden sm:block">
-                      <p className="text-sm font-medium">{session.user.name || session.user.email}</p>
-                      <p className="text-xs text-gray-500">{session.user.role}</p>
+                      <p className="text-sm font-medium">{user.name || user.email}</p>
+                      <p className="text-xs text-gray-500">{user.role}</p>
                     </div>
                   </div>
                 </Button>
@@ -273,8 +420,8 @@ export default function NotesPage() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div>
-                    <p className="font-medium">{session.user.name || session.user.email}</p>
-                    <p className="text-xs text-gray-500 font-normal">{session.user.email}</p>
+                    <p className="font-medium">{user.name || user.email}</p>
+                    <p className="text-xs text-gray-500 font-normal">{user.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -303,13 +450,13 @@ export default function NotesPage() {
             </div>
 
             <div className="flex items-center space-x-3">
-              {shouldShowUpgrade && (
+              {shouldShowUpgradeUI && (
                 <Button
-                  onClick={handleUpgrade}
-                  disabled={upgrading}
+                  onClick={upgradeButtonHandler}
+                  disabled={upgradeButtonLoading}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                  {upgrading ? (
+                  {upgradeButtonLoading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <Zap className="w-4 h-4 mr-2" />
@@ -336,9 +483,9 @@ export default function NotesPage() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Create New Note</DialogTitle>
+                    <DialogTitle>{editingNote ? 'Edit Note' : 'Create New Note'}</DialogTitle>
                     <DialogDescription>
-                      Add a new note to your collection.
+                      {editingNote ? 'Update your note details.' : 'Add a new note to your collection.'}
                     </DialogDescription>
                   </DialogHeader>
 
@@ -384,10 +531,10 @@ export default function NotesPage() {
                         {loading ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Creating...
+                            {editingNote ? 'Updating...' : 'Creating...'}
                           </>
                         ) : (
-                          'Create Note'
+                          editingNote ? 'Update Note' : 'Create Note'
                         )}
                       </Button>
                     </div>
@@ -409,7 +556,7 @@ export default function NotesPage() {
           </div>
 
           {/* Upgrade Banner */}
-          {shouldShowUpgrade && (
+          {shouldShowUpgradeUI && (
             <Card className="border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -427,11 +574,11 @@ export default function NotesPage() {
                     </div>
                   </div>
                   <Button
-                    onClick={handleUpgrade}
-                    disabled={upgrading}
+                    onClick={upgradeButtonHandler}
+                    disabled={upgradeButtonLoading}
                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                   >
-                    {upgrading ? (
+                    {upgradeButtonLoading ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <Zap className="w-4 h-4 mr-2" />
@@ -477,17 +624,32 @@ export default function NotesPage() {
                       <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
                         {note.title}
                       </CardTitle>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(note._id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEdit(note)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(note._id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <CardDescription>
-                      Updated {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+                    <CardDescription className="flex items-center justify-between">
+                      <span>Updated {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}</span>
+                      {user.role === 'Admin' && (
+                        <Badge variant="outline" className="text-xs">
+                          {note.author && note.author._id === user.id ? 'Your note' : `By ${note.author?.name || note.author?.email}`}
+                        </Badge>
+                      )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

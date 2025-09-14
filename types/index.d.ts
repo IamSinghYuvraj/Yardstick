@@ -1,4 +1,3 @@
-
 import mongoose, { Document } from 'mongoose';
 
 export interface ITenant extends Document {
@@ -11,7 +10,7 @@ export interface ITenant extends Document {
 export interface IUser extends Document {
   email: string;
   password?: string;
-  role: 'Admin' | 'Member';
+  role: 'Admin' | 'User';
   tenant: mongoose.Schema.Types.ObjectId;
 }
 
@@ -20,4 +19,12 @@ export interface INote extends Document {
   content: string;
   tenant: mongoose.Schema.Types.ObjectId;
   author: mongoose.Schema.Types.ObjectId;
+}
+
+export interface IInvite extends Document {
+  email: string;
+  tenant: mongoose.Schema.Types.ObjectId;
+  token: string;
+  expires: Date;
+  status: 'Pending' | 'Accepted';
 }

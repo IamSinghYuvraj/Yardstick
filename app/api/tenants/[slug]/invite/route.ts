@@ -1,53 +1,88 @@
-
+// app/api/tenants/[slug]/invite/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { User, Tenant } from '@/models';
-import { getAuth } from '@/lib/auth';
+import { User, Tenant, Invite } from '@/models'; // Import Invite model
+import { requireAdmin } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
-import bcrypt from 'bcrypt';
+import { sendInvitationEmail } from '@/lib/mailer';
+import crypto from 'crypto'; // Import crypto for token generation
 
 export async function POST(request: NextRequest, { params }: { params: { slug: string } }) {
   try {
     await dbConnect();
-    const { user } = await getAuth(request);
-
-    if (!user || user.role !== 'Admin') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    
+    // Role-Based Access Control: Only Admins can invite users
+    const authResult = requireAdmin(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
     }
 
-    const tenant = await Tenant.findOne({ slug: params.slug });
-
-    if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    const { user: adminUser } = authResult;
+    
+    // Verify admin is inviting to their own tenant
+    if (adminUser.tenantSlug !== params.slug) { // Access tenant slug directly from adminUser
+      return NextResponse.json({ success: false, error: 'You can only invite users to your own tenant' }, { status: 403 });
     }
 
-    if (tenant._id.toString() !== user.tenant._id.toString()) {
-      return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
-    }
-
-    const { email } = await request.json();
+    const { email, role = 'Member' } = await request.json();
 
     if (!email) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 
-    const existingUser = await User.findOne({ email });
+    if (!['Admin', 'Member'].includes(role)) {
+      return NextResponse.json({ success: false, error: 'Invalid role specified' }, { status: 400 });
+    }
 
+    // Find the tenant
+    const tenant = await Tenant.findOne({ slug: params.slug });
+    if (!tenant) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Check if user already exists with this email in ANY tenant
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return NextResponse.json({ success: false, error: 'User with this email already exists' }, { status: 409 });
     }
 
-    // For simplicity, we'll generate a random password.
-    // In a real application, you would send an invitation email with a link to set the password.
-    const password = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+    // Check if an active invite already exists for this email and tenant
+    const existingInvite = await Invite.findOne({ email, tenant: tenant._id, status: 'Pending' });
+    if (existingInvite) {
+      return NextResponse.json({ success: false, error: 'An active invitation already exists for this user and tenant' }, { status: 409 });
+    }
 
-    const newUser = await User.create({
+    // Generate a unique invitation token
+    const invitationToken = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+    // Save the invitation to the database
+    const newInvite = await Invite.create({
       email,
-      password,
-      role: 'Member',
       tenant: tenant._id,
+      token: invitationToken,
+      expires,
+      status: 'Pending',
     });
 
-    return NextResponse.json({ success: true, user: newUser });
+    // Create invitation link
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+    const invitationLink = `${baseUrl}/signup?inviteToken=${invitationToken}`; // Use inviteToken
+
+    // Send invitation email
+    try {
+      await sendInvitationEmail(email, invitationLink, tenant.name, role);
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Decide whether to return an error or continue. For now, we'll continue but log the error.
+      // If email sending is critical, you might want to return a 500 here.
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: `Invitation sent to ${email}`,
+      inviteLink: process.env.NODE_ENV === 'development' ? invitationLink : undefined // For development/testing
+    });
+
   } catch (error) {
     console.error('Invite user error:', error);
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });

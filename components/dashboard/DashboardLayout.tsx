@@ -1,8 +1,8 @@
+// components/dashboard/DashboardLayout.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -16,14 +16,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Building2, FileText, LogOut, Settings, User as UserIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-// Define types for User and Tenant based on your session structure
-interface SessionUser {
+interface User {
   id: string;
   email: string;
   name?: string;
@@ -33,28 +31,39 @@ interface SessionUser {
     name: string;
     slug: string;
     plan: 'Free' | 'Pro';
-    // Add other tenant properties if they are part of the session user object
   };
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (status === 'loading') return;
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
 
-    if (status === 'unauthenticated') {
+    if (!token || !userData) {
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData) as User;
+      setUser(parsedUser);
+    } catch (err) {
+      console.error('Error parsing user data:', err);
       router.push('/login');
     }
-  }, [status, router]);
+  }, [router]);
 
   const handleLogout = () => {
-    signOut({ callbackUrl: '/login' });
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    router.push('/login');
   };
 
-  if (status === 'loading' || !session?.user) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex items-center space-x-2 text-gray-500">
@@ -65,16 +74,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  const user = session.user as SessionUser; // Cast session.user to our defined SessionUser type
-  const tenant = user.tenant; // Tenant info is directly on the user object from session
-
   const navigation = [
     { name: 'Notes', href: '/notes', icon: FileText, current: pathname === '/notes' },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings, current: pathname === '/dashboard/settings' },
   ];
 
   if (user.role === 'Admin') {
-    navigation.push({ name: 'Invite User', href: '/dashboard/settings', icon: UserIcon, current: pathname === '/dashboard/settings' });
+    // Admin gets access to user management in settings
+    navigation.find(nav => nav.name === 'Settings')!.current = pathname === '/dashboard/settings';
   }
 
   return (
@@ -83,17 +90,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg border-r">
         <div className="flex flex-col h-full">
           {/* Tenant Header */}
-          <div className="p-6 border-b" style={{ backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}10` }}> {/* Placeholder color */} 
+          <div className="p-6 border-b bg-blue-50">
             <div className="flex items-center space-x-3">
-              <div 
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                style={{ backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}` }} // Placeholder color
-              >
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold bg-blue-600">
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">{tenant.name}</h2>
-                <p className="text-sm text-gray-500">{tenant.slug}</p>
+                <h2 className="text-lg font-semibold text-gray-900">{user.tenant.name}</h2>
+                <p className="text-sm text-gray-500">{user.tenant.slug}</p>
               </div>
             </div>
           </div>
@@ -108,7 +112,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   href={item.href}
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     item.current
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
@@ -131,7 +135,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left">
-                      <p className="text-sm font-medium">{user.name || user.email}</p>
+                      <p className="text-sm font-medium">{user.email}</p>
                       <div className="flex items-center space-x-2">
                         <p className="text-xs text-gray-500">{user.email}</p>
                         <Badge 

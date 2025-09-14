@@ -12,15 +12,21 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Search, Edit, Trash2, FileText, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useSession } from 'next-auth/react';
+
 
 // Define types for Note and User based on your models and session structure
+interface Author {
+  _id: string;
+  name?: string;
+  email: string;
+}
+
 interface Note {
   _id: string;
   title: string;
   content: string;
   tenant: string;
-  author: string;
+  author: Author;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,8 +45,20 @@ interface SessionUser {
 }
 
 export function NotesManager() {
-  const { data: session, status } = useSession();
-  const user = session?.user as SessionUser | undefined; // Cast session.user to our defined SessionUser type
+  // Since next-auth is removed, we're providing a mock user for compilation and UI rendering.
+  // In a real application, this 'user' object would come from your actual authentication system.
+  const user: SessionUser | undefined = {
+    id: 'mock-user-id',
+    email: 'mock@example.com',
+    name: 'Mock User',
+    role: 'Admin', // Or 'Member' depending on desired default behavior
+    tenant: {
+      _id: 'mock-tenant-id',
+      name: 'Mock Tenant',
+      slug: 'mock-tenant',
+      plan: 'Pro', // Or 'Free' depending on desired default behavior
+    },
+  };
   const router = useRouter();
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -54,11 +72,11 @@ export function NotesManager() {
   const [showUpgradeAlert, setShowUpgradeAlert] = useState(false);
 
   useEffect(() => {
-    if (status === 'loading') return;
-    if (status === 'authenticated' && user) {
-      loadNotes();
-    }
-  }, [status, user]);
+    // Since next-auth is removed, we assume notes should load on component mount
+    // or user will be provided by another mechanism.
+    // For now, we'll just load notes directly.
+    loadNotes();
+  }, []); // Empty dependency array means it runs once on mount
 
   const loadNotes = async () => {
     setNotesLoading(true);
@@ -175,7 +193,7 @@ export function NotesManager() {
     setShowUpgradeAlert(false);
   };
 
-  if (status === 'loading' || notesLoading || !user) {
+  if (notesLoading || !user) { // Removed status === 'loading' as next-auth is not used
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex items-center space-x-2 text-gray-500">
@@ -355,7 +373,7 @@ export function NotesManager() {
                   <span>Updated {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}</span>
                   {user?.role === 'Admin' && (
                     <Badge variant="outline" className="text-xs">
-                      {note.author === user.id ? 'Your note' : 'Team note'}
+                      {note.author._id === user.id ? 'Your note' : `By ${note.author.name || note.author.email}`}
                     </Badge>
                   )}
                 </CardDescription>

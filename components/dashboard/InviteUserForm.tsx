@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function InviteUserForm() {
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"Member" | "Admin">("Member"); // State for role
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -26,7 +28,7 @@ export function InviteUserForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, role }), // Include role in the body
       });
 
       const data = await response.json();
@@ -34,14 +36,15 @@ export function InviteUserForm() {
       if (response.ok) {
         toast({
           title: "Invitation sent successfully!",
-          description: `An invitation has been sent to ${email}.`,
+          description: `An invitation has been sent to ${email} as a ${role}.`,
         });
         setEmail("");
+        setRole("Member"); // Reset role after sending
         router.refresh();
       } else {
         toast({
           title: "Failed to send invitation.",
-          description: data.message || "An unexpected error occurred.",
+          description: data.error || "An unexpected error occurred.", // Use data.error for consistency
           variant: "destructive",
         });
       }
@@ -78,6 +81,18 @@ export function InviteUserForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="role">Role</Label>
+            <Select value={role} onValueChange={(value: "Member" | "Admin") => setRole(value)}>
+              <SelectTrigger id="role">
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Member">Member</SelectItem>
+                <SelectItem value="Admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Inviting..." : "Invite User"}

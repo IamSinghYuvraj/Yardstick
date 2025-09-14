@@ -1,25 +1,30 @@
-
+// app/api/notes/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Note } from '@/models';
-import { getAuth } from '@/lib/auth';
+import { requireAuth } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     await dbConnect();
-    const { user } = await getAuth(request);
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    
+    const authResult = requireAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
     }
 
-    const note = await Note.findOne({ _id: params.id, tenant: user.tenant });
+    const { user } = authResult;
+
+    // Tenant isolation: Only find notes within the user's tenant
+    const note = await Note.findOne({ _id: params.id, tenant: user.tenantId })
+      .populate('author', 'email');
 
     if (!note) {
       return NextResponse.json({ success: false, error: 'Note not found' }, { status: 404 });
     }
 
-    if (note.author.toString() !== user._id.toString() && user.role !== 'Admin') {
+    // Additional permission check: Only author or Admin can view
+    if (note.author._id.toString() !== user.id && user.role !== 'Admin') {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 
@@ -33,10 +38,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     await dbConnect();
-    const { user } = await getAuth(request);
+    
+    const authResult = requireAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    }
 
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const { user } = authResult;
+
+    // Admins cannot edit notes
+    if (user.role === 'Admin') {
+      return NextResponse.json({ success: false, error: 'Admins are not allowed to edit notes.' }, { status: 403 });
     }
 
     const { title, content } = await request.json();
@@ -45,17 +57,23 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: 'Title and content are required' }, { status: 400 });
     }
 
-    const note = await Note.findOne({ _id: params.id, tenant: user.tenant });
+    // Tenant isolation: Only find notes within the user's tenant
+    const note = await Note.findOne({ _id: params.id, tenant: user.tenantId });
 
     if (!note) {
       return NextResponse.json({ success: false, error: 'Note not found' }, { status: 404 });
     }
 
-    if (note.author.toString() !== user._id.toString() && user.role !== 'Admin') {
+    // Permission check: Only author or Admin can edit
+    if (note.author.toString() !== user.id && user.role !== 'Admin') {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 
-    const updatedNote = await Note.findByIdAndUpdate(params.id, { title, content }, { new: true });
+    const updatedNote = await Note.findByIdAndUpdate(
+      params.id, 
+      { title, content }, 
+      { new: true }
+    ).populate('author', 'email');
 
     return NextResponse.json({ success: true, note: updatedNote });
   } catch (error) {
@@ -67,19 +85,23 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     await dbConnect();
-    const { user } = await getAuth(request);
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    
+    const authResult = requireAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
     }
 
-    const note = await Note.findOne({ _id: params.id, tenant: user.tenant });
+    const { user } = authResult;
+
+    // Tenant isolation: Only find notes within the user's tenant
+    const note = await Note.findOne({ _id: params.id, tenant: user.tenantId });
 
     if (!note) {
       return NextResponse.json({ success: false, error: 'Note not found' }, { status: 404 });
     }
 
-    if (note.author.toString() !== user._id.toString() && user.role !== 'Admin') {
+    // Permission check: Only author or Admin can delete
+    if (note.author.toString() !== user.id && user.role !== 'Admin') {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 

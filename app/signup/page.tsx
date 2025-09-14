@@ -3,97 +3,114 @@
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { jwt_decode } from 'jwt-decode';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 
 const SignupPage = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const token = searchParams.get('token');
+  const { toast } = useToast();
+  const inviteToken = searchParams.get('inviteToken'); // Read inviteToken
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      try {
-        const decodedToken = jwt_decode(token) as { email: string };
-        setEmail(decodedToken.email);
-      } catch (error) {
-        setError('Invalid or expired token.');
-      }
-    }
-  }, [token]);
+    // Optionally, if you want to pre-fill email from the invite (requires backend to send email in token or a separate endpoint)
+    // For now, user will enter their email.
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setIsLoading(true);
 
-    if (!token) {
-      setError('Invalid invitation link.');
+    if (!inviteToken) {
+      toast({
+        title: "Error",
+        description: "Invalid invitation link. Please ensure you have a valid invite token.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
       return;
     }
 
     try {
-      const res = await fetch('/api/signup/invite', {
+      const res = await fetch('/api/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ inviteToken, email, password }), // Pass inviteToken, email, password
       });
 
+      const data = await res.json();
+
       if (res.ok) {
+        toast({
+          title: "Account created!",
+          description: "Your account has been successfully created. Please log in.",
+        });
         router.push('/login');
       } else {
-        const data = await res.json();
-        setError(data.message || 'Something went wrong.');
+        toast({
+          title: "Signup failed.",
+          description: data.error || 'Something went wrong.',
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      setError('An unexpected error occurred.');
+      console.error("Signup error:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center">Create Your Account</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              readOnly
-              className="w-full px-3 py-2 mt-1 text-gray-500 bg-gray-100 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div>
-            <button
-              type="submit"
-              className="w-full px-4 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Sign Up
-            </button>
-          </div>
-        </form>
-      </div>
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl text-center">Create Your Account</CardTitle>
+          <CardDescription className="text-center">
+            Enter your email and password to complete your signup.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="m@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing Up..." : "Sign Up"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };

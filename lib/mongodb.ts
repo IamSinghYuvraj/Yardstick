@@ -17,21 +17,22 @@ let cached = global as typeof globalThis & {
   mongoose?: { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null };
 };
 
-if (!cached.mongoose) {
-  cached.mongoose = { conn: null, promise: null };
-}
-
 async function dbConnect() {
-  if (cached.mongoose && cached.mongoose.conn) {
+  // Ensure cached.mongoose is initialized
+  if (!cached.mongoose) {
+    cached.mongoose = { conn: null, promise: null };
+  }
+
+  if (cached.mongoose.conn) {
     return cached.mongoose.conn;
   }
 
-  if (!cached.mongoose || !cached.mongoose.promise) {
+  if (!cached.mongoose.promise) {
     const opts = {
       bufferCommands: false,
     };
 
-    cached.mongoose.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    cached.mongoose.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => { // Use non-null assertion
       return mongoose;
     });
   }

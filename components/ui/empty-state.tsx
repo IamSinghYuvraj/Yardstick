@@ -1,10 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { DivideIcon as LucideIcon } from 'lucide-react';
+import { LucideIcon } from 'lucide-react'; // Import LucideIcon type
+import React from 'react'; // Import React for React.ElementType
 
 interface EmptyStateProps {
-  icon: LucideIcon;
+  icon: React.ElementType; // Use React.ElementType for a generic component type
   title: string;
   description: string;
   action?: {

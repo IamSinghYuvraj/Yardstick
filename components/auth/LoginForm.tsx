@@ -1,3 +1,4 @@
+// components/auth/LoginForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -7,8 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { signIn } from 'next-auth/react';
-import { Building2, Lock, Mail } from 'lucide-react';
+import { Building2, Lock, Mail, Loader2 } from 'lucide-react';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -23,15 +23,29 @@ export function LoginForm() {
     setError('');
 
     try {
-      const result = await signIn('credentials', { email, password, redirect: false });
-      if (result?.ok) {
-        router.push('/dashboard');
-        router.refresh();
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Store JWT token in localStorage for stateless authentication
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Redirect to notes dashboard
+        router.push('/notes');
       } else {
-        setError(result?.error || 'Invalid email or password');
+        setError(data.error || 'Login failed');
       }
-    } catch {
-      setError('Login failed. Please try again.');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -94,7 +108,14 @@ export function LoginForm() {
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
               </Button>
             </form>
           </CardContent>
