@@ -1,14 +1,15 @@
+// app/api/signup/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/mongodb';
-import { User, Invite, Tenant } from '@/models'; // Import Invite and Tenant models
+import { User, Invite, Tenant } from '@/models';
 
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
 
-    const { inviteToken, email, password } = await request.json(); // Expect inviteToken, email, password
+    const { inviteToken, email, password } = await request.json();
 
     if (!inviteToken || !email || !password) {
       return NextResponse.json(
@@ -17,57 +18,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find and validate the invitation
-    const invitation = await Invite.findOne({ token: inviteToken, email, status: 'Pending' });
-
-    if (!invitation) {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid, expired, or already used invitation token' },
+        { success: false, error: 'Please provide a valid email address' },
         { status: 400 }
       );
     }
 
+    // Validate password strength
+    if (password.length < 6) {
+      return NextResponse.json(
+        { success: false, error: 'Password must be at least 6 characters long' },
+        { status: 400 }
+      );
+    }
+
+    // Find and validate the invitation
+    const invitation = await Invite.findOne({ 
+      token: inviteToken, 
+      email: email.toLowerCase(), 
+      status: 'Pending' 
+    }).populate('tenant');
+
+    if (!invitation) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid invitation link. Please check your invitation or request a new one.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if invitation has expired
     if (invitation.expires < new Date()) {
-      invitation.status = 'Expired'; // Mark as expired
+      invitation.status = 'Expired';
       await invitation.save();
       return NextResponse.json(
-        { success: false, error: 'Invitation token has expired' },
+        { success: false, error: 'This invitation link has expired. Please request a new invitation.' },
         { status: 400 }
       );
     }
 
     // Check if user already exists with this email
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return NextResponse.json(
-        { success: false, error: 'User with this email already exists' },
+        { success: false, error: 'An account with this email address already exists' },
         { status: 409 }
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash the password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create the new user using details from the invitation
+    // Create the new user
     const newUser = await User.create({
-      email,
+      email: email.toLowerCase(),
       password: hashedPassword,
-      role: invitation.role, // Use role from invitation
-      tenant: invitation.tenant, // Use tenant from invitation
+      role: 'Member', // All invited users are members by default
+      tenant: invitation.tenant._id,
     });
 
     // Mark the invitation as accepted
     invitation.status = 'Accepted';
     await invitation.save();
 
-    // Fetch tenant details for the login payload
-    const tenant = await Tenant.findById(invitation.tenant);
-    if (!tenant) {
-      // This should ideally not happen if invitation.tenant is valid
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found for invitation' },
-        { status: 500 }
-      );
-    }
+    // Populate the tenant information for the response
+    const tenant = invitation.tenant as any;
 
     // Generate a login token for the new user
     const loginPayload = {
@@ -83,11 +101,27 @@ export async function POST(request: NextRequest) {
       expiresIn: '7d'
     });
 
-    return NextResponse.json({ success: true, message: 'User created successfully', token: loginToken });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Account created successfully! You are now logged in.',
+      token: loginToken,
+      user: {
+        id: newUser._id.toString(),
+        email: newUser.email,
+        role: newUser.role,
+        tenant: {
+          _id: tenant._id.toString(),
+          name: tenant.name,
+          slug: tenant.slug,
+          plan: tenant.plan
+        }
+      }
+    });
+
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'An unexpected error occurred while creating your account' },
       { status: 500 }
     );
   }

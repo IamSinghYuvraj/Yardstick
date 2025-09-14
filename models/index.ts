@@ -1,3 +1,4 @@
+// models/index.ts
 import mongoose, { Schema, models } from 'mongoose';
 import { ITenant, IUser, INote, IInvite } from '../types/index';
 
@@ -6,16 +7,16 @@ const TenantSchema: Schema = new Schema({
   slug: { type: String, required: true, unique: true },
   plan: { type: String, enum: ['Free', 'Pro'], default: 'Free' },
   maxNotes: { type: Number, default: 3 },
-});
+}, { timestamps: true });
 
 export const Tenant = models.Tenant || mongoose.model<ITenant>('Tenant', TenantSchema);
 
 const UserSchema: Schema = new Schema({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true, select: false },
-  role: { type: String, enum: ['Admin', 'User'], required: true },
+  role: { type: String, enum: ['Admin', 'Member'], required: true },
   tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
-});
+}, { timestamps: true });
 
 export const User = models.User || mongoose.model<IUser>('User', UserSchema);
 
@@ -29,11 +30,17 @@ const NoteSchema: Schema = new Schema({
 export const Note = models.Note || mongoose.model<INote>('Note', NoteSchema);
 
 const InviteSchema: Schema = new Schema({
-  email: { type: String, required: true },
+  email: { type: String, required: true, lowercase: true },
   tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
   token: { type: String, required: true, unique: true },
   expires: { type: Date, required: true },
-  status: { type: String, enum: ['Pending', 'Accepted'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Accepted', 'Expired'], default: 'Pending' },
 }, { timestamps: true });
+
+// Create compound index to ensure unique pending invites per email/tenant
+InviteSchema.index({ email: 1, tenant: 1, status: 1 }, { 
+  unique: true, 
+  partialFilterExpression: { status: 'Pending' } 
+});
 
 export const Invite = models.Invite || mongoose.model<IInvite>('Invite', InviteSchema);

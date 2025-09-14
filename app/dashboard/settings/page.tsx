@@ -5,15 +5,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Mail, User as UserIcon, Trash2, Crown, Zap } from 'lucide-react';
+import { Loader2, User as UserIcon, Trash2, Crown, Shield } from 'lucide-react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import { InviteUserForm } from '@/components/dashboard/InviteUserForm'; // Import the InviteUserForm
+import { InviteUserForm } from '@/components/dashboard/InviteUserForm';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Badge } from '@/components/ui/badge';
 
 interface User {
   id: string;
@@ -43,7 +43,6 @@ export default function SettingsPage() {
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [upgradingTenant, setUpgradingTenant] = useState(false);
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -64,7 +63,7 @@ export default function SettingsPage() {
         setTenantUsers(data.users);
       } else {
         toast({
-          title: "Error fetching users.",
+          title: "Error fetching users",
           description: data.error || "Failed to load tenant users.",
           variant: "destructive",
         });
@@ -72,7 +71,7 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error fetching tenant users:", error);
       toast({
-        title: "Error",
+        title: "Connection Error",
         description: "Could not connect to the server to fetch users.",
         variant: "destructive",
       });
@@ -115,17 +114,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Prevent changing a 'User' role to 'Admin' (enforced by backend, but good to have frontend check)
-    const userToUpdate = tenantUsers.find(u => u.id === userId);
-    if (userToUpdate?.role === 'Member' && newRole === 'Admin') {
-      toast({
-        title: "Permission Denied",
-        description: "Cannot promote a user to Admin through this interface.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSubmitting(true);
     try {
       const response = await fetch(`/api/tenants/${currentUser.tenant.slug}/users/${userId}/role`, {
@@ -134,27 +122,16 @@ export default function SettingsPage() {
         body: JSON.stringify({ role: newRole }),
       });
       const data = await response.json();
+      
       if (response.ok && data.success) {
         toast({
-          title: "User role updated.",
-          description: `${data.user.email}'s role changed to ${newRole}.`, // Updated toast message
+          title: "Role updated successfully",
+          description: `${data.user.email}'s role has been changed to ${newRole}.`,
         });
-        fetchTenantUsers(currentUser.tenant.slug); // Refresh the list
-
-        // This block is technically unreachable due to the 'cannot change own role' check above,
-        // but kept for completeness if logic changes.
-        if (currentUser.id === userId) {
-          const updatedCurrentUser = {
-            ...currentUser,
-            role: newRole,
-          };
-          setCurrentUser(updatedCurrentUser);
-          localStorage.setItem('user', JSON.stringify(updatedCurrentUser));
-        }
-
+        fetchTenantUsers(currentUser.tenant.slug);
       } else {
         toast({
-          title: "Failed to update role.",
+          title: "Failed to update role",
           description: data.error || "An unexpected error occurred.",
           variant: "destructive",
         });
@@ -162,7 +139,7 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error updating user role:", error);
       toast({
-        title: "Error",
+        title: "Connection Error",
         description: "Could not connect to the server to update role.",
         variant: "destructive",
       });
@@ -171,8 +148,9 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
     if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
+    
     setSubmitting(true);
     try {
       const response = await fetch(`/api/tenants/${currentUser.tenant.slug}/users/${userId}/role`, {
@@ -180,15 +158,16 @@ export default function SettingsPage() {
         headers: getAuthHeaders(),
       });
       const data = await response.json();
+      
       if (response.ok && data.success) {
         toast({
-          title: "User deleted.",
-          description: data.message,
+          title: "User removed successfully",
+          description: `${userEmail} has been removed from your organization.`,
         });
-        fetchTenantUsers(currentUser.tenant.slug); // Refresh the list
+        fetchTenantUsers(currentUser.tenant.slug);
       } else {
         toast({
-          title: "Failed to delete user.",
+          title: "Failed to remove user",
           description: data.error || "An unexpected error occurred.",
           variant: "destructive",
         });
@@ -196,8 +175,8 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error deleting user:", error);
       toast({
-        title: "Error",
-        description: "Could not connect to the server to delete user.",
+        title: "Connection Error",
+        description: "Could not connect to the server to remove user.",
         variant: "destructive",
       });
     } finally {
@@ -207,18 +186,18 @@ export default function SettingsPage() {
 
   const handleTenantPlanChange = async (newPlan: 'Free' | 'Pro') => {
     if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
-    setSubmitting(true); // Use submitting for general plan changes
+    
+    setSubmitting(true);
     try {
       const response = await fetch(`/api/tenants/${currentUser.tenant.slug}/upgrade`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ plan: newPlan }), // Send the new plan
+        body: JSON.stringify({ plan: newPlan }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Update user data in localStorage and state
         const updatedUser = {
           ...currentUser,
           tenant: { ...currentUser.tenant, plan: newPlan }
@@ -226,30 +205,27 @@ export default function SettingsPage() {
         setCurrentUser(updatedUser);
         localStorage.setItem('user', JSON.stringify(updatedUser));
         toast({
-          title: "Tenant Plan Updated!",
-          description: `Your tenant has been successfully changed to the ${newPlan} plan.`,
+          title: "Plan updated successfully!",
+          description: `Your organization has been successfully changed to the ${newPlan} plan.`,
         });
       } else {
         toast({
-          title: "Plan Change Failed",
-          description: data.error || `Failed to change tenant plan to ${newPlan}.`,
+          title: "Plan change failed",
+          description: data.error || `Failed to change plan to ${newPlan}.`,
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error('Error changing tenant plan:', error);
       toast({
-        title: "Error",
-        description: "Could not connect to the server to change tenant plan.",
+        title: "Connection Error",
+        description: "Could not connect to the server to change plan.",
         variant: "destructive",
       });
     } finally {
       setSubmitting(false);
     }
   };
-
-  // Refactor handleTenantUpgrade to use handleTenantPlanChange
-  const handleTenantUpgrade = () => handleTenantPlanChange('Pro');
 
   if (!currentUser) {
     return (
@@ -263,34 +239,73 @@ export default function SettingsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-gray-500">Manage your tenant and user settings.</p>
+          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+          <p className="text-gray-500 mt-1">Manage your organization and user settings</p>
         </div>
 
+        {/* Organization Plan */}
         {currentUser.role === 'Admin' && (
           <>
             <Card>
               <CardHeader>
-                <CardTitle>Tenant Plan</CardTitle>
-                <CardDescription>Manage your tenant's subscription plan.</CardDescription>
+                <CardTitle className="flex items-center space-x-2">
+                  <Crown className="h-5 w-5" />
+                  <span>Organization Plan</span>
+                </CardTitle>
+                <CardDescription>Manage your organization's subscription plan and features.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Current Plan</Label>
-                    <p className="text-sm text-gray-600">{currentUser.tenant.plan}</p>
+                  <div className="space-y-1">
+                    <Label className="text-base">Current Plan</Label>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={currentUser.role === 'Admin' ? 'default' : 'secondary'}>
+                    {currentUser.role === 'Admin' ? (
+                      <><Shield className="w-3 h-3 mr-1" /> Admin</>
+                    ) : (
+                      <><UserIcon className="w-3 h-3 mr-1" /> Member</>
+                    )}
+                  </Badge>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Organization</Label>
+                <p className="text-gray-900">{currentUser.tenant.name}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Plan</Label>
+                <Badge variant={currentUser.tenant.plan === 'Pro' ? 'default' : 'secondary'}>
+                  {currentUser.tenant.plan}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+}={currentUser.tenant.plan === 'Pro' ? 'default' : 'secondary'}>
+                        {currentUser.tenant.plan}
+                      </Badge>
+                      <span className="text-sm text-gray-600">
+                        {currentUser.tenant.plan === 'Pro' 
+                          ? 'Unlimited notes and features' 
+                          : 'Limited to 3 notes'
+                        }
+                      </span>
+                    </div>
                   </div>
                   <Select
                     value={currentUser.tenant.plan}
                     onValueChange={(newPlan: 'Free' | 'Pro') => handleTenantPlanChange(newPlan)}
-                    disabled={submitting} // Use submitting state
+                    disabled={submitting}
                   >
-                    <SelectTrigger className="w-[120px]">
+                    <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="Select plan" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Free">Free</SelectItem>
-                      <SelectItem value="Pro">Pro</SelectItem>
+                      <SelectItem value="Free">Free Plan</SelectItem>
+                      <SelectItem value="Pro">Pro Plan</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -299,35 +314,62 @@ export default function SettingsPage() {
 
             <Separator />
 
-            <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} /> {/* Use the dedicated InviteUserForm component */}
+            {/* Invite Users */}
+            <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} />
 
             <Separator />
 
+            {/* Team Members */}
             <Card>
               <CardHeader>
-                <CardTitle>Tenant Users</CardTitle>
-                <CardDescription>Manage users within your tenant.</CardDescription>
+                <CardTitle className="flex items-center space-x-2">
+                  <UserIcon className="h-5 w-5" />
+                  <span>Team Members</span>
+                </CardTitle>
+                <CardDescription>Manage users and permissions within your organization.</CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="ml-2">Loading users...</span>
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    <span className="text-gray-500">Loading team members...</span>
                   </div>
                 ) : tenantUsers.length === 0 ? (
-                  <p className="text-sm text-gray-500">No users found in this tenant.</p>
+                  <div className="text-center py-8">
+                    <UserIcon className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">No team members found</p>
+                  </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {tenantUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-3 border rounded-md">
+                      <div key={user.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <div className="flex items-center space-x-3">
-                          <UserIcon className="w-5 h-5 text-gray-500" />
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-center">
+                            <span className="text-white font-medium text-sm">
+                              {user.email[0].toUpperCase()}
+                            </span>
+                          </div>
                           <div>
-                            <p className="font-medium">{user.email}</p>
-                            <p className="text-sm text-gray-500">{user.role}</p> {/* Display actual role */}
+                            <p className="font-medium text-gray-900">{user.email}</p>
+                            <div className="flex items-center space-x-2">
+                              <Badge 
+                                variant={user.role === 'Admin' ? 'default' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {user.role === 'Admin' ? (
+                                  <><Shield className="w-3 h-3 mr-1" /> Admin</>
+                                ) : (
+                                  <><UserIcon className="w-3 h-3 mr-1" /> Member</>
+                                )}
+                              </Badge>
+                              <span className="text-xs text-gray-500">
+                                {user.id === currentUser.id && '(You)'}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        {currentUser.id !== user.id && ( // Cannot change own role or delete self
+                        
+                        {currentUser.id !== user.id && (
                           <div className="flex items-center space-x-2">
                             <Select
                               value={user.role}
@@ -335,33 +377,38 @@ export default function SettingsPage() {
                               disabled={submitting}
                             >
                               <SelectTrigger className="w-[120px]">
-                                <SelectValue placeholder="Select account type" />
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Member">Member</SelectItem> {/* Display Member, send Member */}
-                                <SelectItem value="Admin">Admin</SelectItem> {/* Display Admin, send Admin */}
+                                <SelectItem value="Member">Member</SelectItem>
+                                <SelectItem value="Admin">Admin</SelectItem>
                               </SelectContent>
                             </Select>
+                            
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="icon" disabled={submitting}>
+                                <Button variant="outline" size="icon" disabled={submitting}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete {user.email} and remove their data from our servers.
+                                    Are you sure you want to remove <strong>{user.email}</strong> from your organization? 
+                                    This action cannot be undone and they will lose access to all shared data.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-red-500 hover:bg-red-600">
-                                    Delete
+                                  <AlertDialogAction 
+                                    onClick={() => handleDeleteUser(user.id, user.email)} 
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Remove User
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
-                            </AlertDialogContent>
+                              </AlertDialogContent>
                             </AlertDialog>
                           </div>
                         )}
@@ -376,33 +423,19 @@ export default function SettingsPage() {
           </>
         )}
 
+        {/* Account Information */}
         <Card>
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
-            <CardDescription>Your account details and tenant information.</CardDescription>
+            <CardDescription>Your personal account details and organization information.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Email</Label>
-                <p className="text-sm text-gray-600">{currentUser.email}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Email Address</Label>
+                <p className="text-gray-900">{currentUser.email}</p>
               </div>
-              <div>
-                <Label>Role</Label> {/* Changed label to Role */}
-                <p className="text-sm text-gray-600">{currentUser.role}</p> {/* Display actual role */}
-              </div>
-              <div>
-                <Label>Tenant</Label>
-                <p className="text-sm text-gray-600">{currentUser.tenant.name}</p>
-              </div>
-              <div>
-                <Label>Plan</Label>
-                <p className="text-sm text-gray-600">{currentUser.tenant.plan}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
-  );
-}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Role</Label>
+                <div className="flex items-center space-x-2">
+                  <Badge variant

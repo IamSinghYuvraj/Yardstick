@@ -1,3 +1,4 @@
+// types/index.d.ts
 import mongoose, { Document } from 'mongoose';
 
 export interface ITenant extends Document {
@@ -5,13 +6,17 @@ export interface ITenant extends Document {
   slug: string;
   plan: 'Free' | 'Pro';
   maxNotes: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface IUser extends Document {
   email: string;
   password?: string;
-  role: 'Admin' | 'User';
+  role: 'Admin' | 'Member';
   tenant: mongoose.Schema.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface INote extends Document {
@@ -19,6 +24,8 @@ export interface INote extends Document {
   content: string;
   tenant: mongoose.Schema.Types.ObjectId;
   author: mongoose.Schema.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface IInvite extends Document {
@@ -26,5 +33,7 @@ export interface IInvite extends Document {
   tenant: mongoose.Schema.Types.ObjectId;
   token: string;
   expires: Date;
-  status: 'Pending' | 'Accepted';
+  status: 'Pending' | 'Accepted' | 'Expired';
+  createdAt: Date;
+  updatedAt: Date;
 }
