@@ -24,8 +24,8 @@ interface Note {
 let notes: Note[] = [
   {
     id: '1',
-    title: 'Welcome to Acme Corp',
-    content: 'This is your first note in the Acme Corp tenant. You can create, edit, and delete notes here.',
+    title: 'Welcome to Acme Corporation',
+    content: 'This is your first note in the Acme Corporation tenant. You can create, edit, and delete notes here. As a Free plan user, you can create up to 3 notes.',
     userId: '1',
     tenantId: '1',
     createdAt: new Date().toISOString(),
@@ -33,8 +33,8 @@ let notes: Note[] = [
   },
   {
     id: '2',
-    title: 'Meeting Notes',
-    content: 'Discussed quarterly goals and upcoming projects. Need to follow up on budget allocation.',
+    title: 'Q1 Planning Meeting',
+    content: 'Discussed quarterly goals and upcoming projects. Key action items: 1) Finalize budget allocation, 2) Review team capacity, 3) Set milestone dates.',
     userId: '2',
     tenantId: '1',
     createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -42,8 +42,8 @@ let notes: Note[] = [
   },
   {
     id: '3',
-    title: 'Globex Project Ideas',
-    content: 'Brainstorming session results: 1. New product line, 2. Market expansion, 3. Technology upgrades.',
+    title: 'Product Innovation Ideas',
+    content: 'Brainstorming session results: 1. AI-powered analytics dashboard, 2. Mobile app development, 3. API marketplace integration, 4. Advanced reporting features.',
     userId: '3',
     tenantId: '2',
     createdAt: new Date(Date.now() - 172800000).toISOString(),

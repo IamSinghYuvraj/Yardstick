@@ -38,17 +38,17 @@ export interface NotesResponse {
   error?: string;
 }
 
-// Mock data - In production, this would come from your backend
+// Mock data for demo - Replace with actual API calls in production
 export const TENANTS: Tenant[] = [
-  { id: '1', name: 'Acme Corp', slug: 'acme', color: '#3B82F6', plan: 'Free', maxNotes: 3 },
+  { id: '1', name: 'Acme Corporation', slug: 'acme', color: '#3B82F6', plan: 'Free', maxNotes: 3 },
   { id: '2', name: 'Globex Corporation', slug: 'globex', color: '#10B981', plan: 'Pro', maxNotes: -1 }
 ];
 
 export const MOCK_USERS: User[] = [
-  { id: '1', email: 'admin@acme.com', name: 'John Admin', role: 'Admin', tenantId: '1' },
-  { id: '2', email: 'member@acme.com', name: 'Jane Member', role: 'Member', tenantId: '1' },
-  { id: '3', email: 'admin@globex.com', name: 'Bob Admin', role: 'Admin', tenantId: '2' },
-  { id: '4', email: 'member@globex.com', name: 'Alice Member', role: 'Member', tenantId: '2' }
+  { id: '1', email: 'admin@acme.test', name: 'John Admin', role: 'Admin', tenantId: '1' },
+  { id: '2', email: 'user@acme.test', name: 'Jane Member', role: 'Member', tenantId: '1' },
+  { id: '3', email: 'admin@globex.test', name: 'Bob Admin', role: 'Admin', tenantId: '2' },
+  { id: '4', email: 'user@globex.test', name: 'Alice Member', role: 'Member', tenantId: '2' }
 ];
 
 export class AuthService {

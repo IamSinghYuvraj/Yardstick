@@ -133,16 +133,16 @@ export default function LoginPage() {
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-blue-600 flex items-center space-x-2">
+                  <div className="font-medium text-blue-700 flex items-center space-x-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-                    <span>Acme Corp (Free Plan)</span>
+                    <span>Acme Corporation (Free Plan)</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDemoLogin('admin@acme.com')}
+                    onClick={() => handleDemoLogin('admin@acme.test')}
                     className="text-xs border-blue-200 hover:bg-blue-50"
                   >
                     Admin Login
@@ -150,26 +150,26 @@ export default function LoginPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDemoLogin('member@acme.com')}
+                    onClick={() => handleDemoLogin('user@acme.test')}
                     className="text-xs border-blue-200 hover:bg-blue-50"
                   >
-                    Member Login
+                    User Login
                   </Button>
                 </div>
               </div>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-green-600 flex items-center space-x-2">
+                  <div className="font-medium text-green-700 flex items-center space-x-2">
                     <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                    <span>Globex (Pro Plan)</span>
+                    <span>Globex Corporation (Pro Plan)</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDemoLogin('admin@globex.com')}
+                    onClick={() => handleDemoLogin('admin@globex.test')}
                     className="text-xs border-green-200 hover:bg-green-50"
                   >
                     Admin Login
@@ -177,10 +177,10 @@ export default function LoginPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDemoLogin('member@globex.com')}
+                    onClick={() => handleDemoLogin('user@globex.test')}
                     className="text-xs border-green-200 hover:bg-green-50"
                   >
-                    Member Login
+                    User Login
                   </Button>
                 </div>
               </div>
@@ -188,7 +188,7 @@ export default function LoginPage() {
             
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="text-gray-500 text-xs">
-                Password: <span className="font-mono bg-gray-100 px-1 rounded">password123</span>
+                Password: <span className="font-mono bg-gray-100 px-1 rounded">password</span>
               </div>
             </div>
           </CardContent>

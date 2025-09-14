@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     // Find user by email
     const user = MOCK_USERS.find(u => u.email === email);
     
-    if (!user || password !== 'password123') {
+    if (!user || password !== 'password') {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' }, 
         { status: 401 }

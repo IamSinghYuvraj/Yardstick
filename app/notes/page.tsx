@@ -236,8 +236,8 @@ export default function NotesPage() {
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">My Notes</h2>
-              <p className="text-gray-500 mt-1">Create and manage your notes</p>
+              <h2 className="text-2xl font-bold text-gray-900">Notes</h2>
+              <p className="text-gray-500 mt-1">Create and manage your team's notes</p>
             </div>
             
             <div className="flex items-center space-x-3">
@@ -245,7 +245,7 @@ export default function NotesPage() {
                 <Button 
                   onClick={handleUpgrade}
                   disabled={upgrading}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 >
                   {upgrading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -348,26 +348,26 @@ export default function NotesPage() {
 
           {/* Upgrade Banner */}
           {shouldShowUpgrade && (
-            <Card className="border-2 border-dashed border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50">
+            <Card className="border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
                       <Crown className="w-6 h-6 text-white" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
-                        You've reached your note limit!
+                        Note limit reached
                       </h3>
                       <p className="text-gray-600">
-                        Upgrade to Pro for unlimited notes and premium features.
+                        Upgrade to Pro plan for unlimited notes and advanced features.
                       </p>
                     </div>
                   </div>
                   <Button 
                     onClick={handleUpgrade}
                     disabled={upgrading}
-                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                   >
                     {upgrading ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

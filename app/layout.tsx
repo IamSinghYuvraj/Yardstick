@@ -5,8 +5,8 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Multi-Tenant Notes App',
-  description: 'A secure multi-tenant notes application with role-based access control',
+  title: 'NotesFlow - Multi-Tenant SaaS Notes Application',
+  description: 'Professional multi-tenant SaaS application for managing notes with role-based access control and subscription management',
 };
 
 export default function RootLayout({
