@@ -299,7 +299,7 @@ export default function SettingsPage() {
 
             <Separator />
 
-            <InviteUserForm /> {/* Use the dedicated InviteUserForm component */}
+            <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} /> {/* Use the dedicated InviteUserForm component */}
 
             <Separator />
 

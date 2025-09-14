@@ -66,18 +66,10 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
     const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
     const invitationLink = `${baseUrl}/signup?inviteToken=${invitationToken}`; // Use inviteToken
 
-    // Send invitation email
-    try {
-      await sendInvitationEmail(email, invitationLink, tenant.name, role);
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      return NextResponse.json({ success: false, error: 'Failed to send invitation email' }, { status: 500 });
-    }
-
     return NextResponse.json({ 
       success: true, 
-      message: `Invitation sent to ${email}`,
-      inviteLink: process.env.NODE_ENV === 'development' ? invitationLink : undefined // For development/testing
+      message: `Invitation link created for ${email}`,
+      inviteLink: invitationLink
     });
 
   } catch (error) {

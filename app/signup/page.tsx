@@ -49,11 +49,12 @@ const SignupPage = () => {
       const data = await res.json();
 
       if (res.ok) {
+        localStorage.setItem('token', data.token); // Store the JWT token
         toast({
           title: "Account created!",
-          description: "Your account has been successfully created. Please log in.",
+          description: "Your account has been successfully created and you are now logged in.",
         });
-        router.push('/login');
+        router.push('/dashboard'); // Redirect to dashboard
       } else {
         toast({
           title: "Signup failed.",
