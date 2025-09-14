@@ -23,15 +23,13 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
       return NextResponse.json({ success: false, error: 'You can only invite users to your own tenant' }, { status: 403 });
     }
 
-    const { email, role = 'Member' } = await request.json();
+    const { email } = await request.json(); // Role is now fixed to 'Member'
 
     if (!email) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 
-    if (!['Admin', 'Member'].includes(role)) {
-      return NextResponse.json({ success: false, error: 'Invalid role specified' }, { status: 400 });
-    }
+    const role = 'Member'; // Force role to 'Member'
 
     // Find the tenant
     const tenant = await Tenant.findOne({ slug: params.slug });
@@ -73,8 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
       await sendInvitationEmail(email, invitationLink, tenant.name, role);
     } catch (emailError) {
       console.error('Email sending error:', emailError);
-      // Decide whether to return an error or continue. For now, we'll continue but log the error.
-      // If email sending is critical, you might want to return a 500 here.
+      return NextResponse.json({ success: false, error: 'Failed to send invitation email' }, { status: 500 });
     }
 
     return NextResponse.json({ 
