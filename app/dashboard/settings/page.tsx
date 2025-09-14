@@ -102,7 +102,7 @@ export default function SettingsPage() {
     }
   }, [router, fetchTenantUsers]);
 
-  const handleRoleChange = async (userId: string, newRole: 'Admin' | 'User') => { // Changed type to 'Admin' | 'User'
+  const handleRoleChange = async (userId: string, newRole: 'Admin' | 'Member') => {
     if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
 
     // Prevent admin from changing their own role
@@ -117,7 +117,7 @@ export default function SettingsPage() {
 
     // Prevent changing a 'User' role to 'Admin' (enforced by backend, but good to have frontend check)
     const userToUpdate = tenantUsers.find(u => u.id === userId);
-    if (userToUpdate?.role === 'User' && newRole === 'Admin') {
+    if (userToUpdate?.role === 'Member' && newRole === 'Admin') {
       toast({
         title: "Permission Denied",
         description: "Cannot promote a user to Admin through this interface.",

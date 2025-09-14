@@ -46,10 +46,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const { user } = authResult;
 
-    // Admins cannot edit notes
-    if (user.role === 'Admin') {
-      return NextResponse.json({ success: false, error: 'Admins are not allowed to edit notes.' }, { status: 403 });
-    }
+    
 
     const { title, content } = await request.json();
 
