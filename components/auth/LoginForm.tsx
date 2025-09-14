@@ -121,26 +121,7 @@ export function LoginForm() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-50 border-dashed">
-          <CardContent className="p-4">
-            <h3 className="font-medium text-sm text-gray-900 mb-3">Demo Accounts</h3>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="space-y-1">
-                <div className="font-medium text-blue-600">Acme Corp</div>
-                <div>admin@acme.test</div>
-                <div>user@acme.test</div>
-              </div>
-              <div className="space-y-1">
-                <div className="font-medium text-green-600">Globex</div>
-                <div>admin@globex.test</div>
-                <div>user@globex.test</div>
-              </div>
-            </div>
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="text-gray-500">Password: <span className="font-mono">password</span></div>
-            </div>
-          </CardContent>
-        </Card>
+        
       </div>
     </div>
   );
