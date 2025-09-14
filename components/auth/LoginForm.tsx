@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AuthService } from '@/lib/auth';
+import { signIn } from 'next-auth/react';
 import { Building2, Lock, Mail } from 'lucide-react';
 
 export function LoginForm() {
@@ -23,12 +23,12 @@ export function LoginForm() {
     setError('');
 
     try {
-      const user = AuthService.login(email, password);
-      if (user) {
+      const result = await signIn('credentials', { email, password, redirect: false });
+      if (result?.ok) {
         router.push('/dashboard');
         router.refresh();
       } else {
-        setError('Invalid email or password');
+        setError(result?.error || 'Invalid email or password');
       }
     } catch {
       setError('Login failed. Please try again.');
@@ -106,17 +106,17 @@ export function LoginForm() {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="space-y-1">
                 <div className="font-medium text-blue-600">Acme Corp</div>
-                <div>admin@acme.com</div>
-                <div>member@acme.com</div>
+                <div>admin@acme.test</div>
+                <div>user@acme.test</div>
               </div>
               <div className="space-y-1">
                 <div className="font-medium text-green-600">Globex</div>
-                <div>admin@globex.com</div>
-                <div>member@globex.com</div>
+                <div>admin@globex.test</div>
+                <div>user@globex.test</div>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="text-gray-500">Password: <span className="font-mono">password123</span></div>
+              <div className="text-gray-500">Password: <span className="font-mono">password</span></div>
             </div>
           </CardContent>
         </Card>

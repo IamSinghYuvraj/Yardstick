@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,15 +20,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AuthService, NotesService, Note, User, Tenant } from '@/lib/auth';
-import { 
-  Plus, 
-  Search, 
-  Trash2, 
-  FileText, 
-  Building2, 
-  LogOut, 
-  Settings, 
+import {
+  Plus,
+  Search,
+  Trash2,
+  FileText,
+  Building2,
+  LogOut,
+  Settings,
   User as UserIcon,
   Crown,
   Zap,
@@ -35,9 +35,30 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+// Define types for Note, User, Tenant based on your models
+interface Note {
+  _id: string;
+  title: string;
+  content: string;
+  tenant: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Tenant {
+  _id: string;
+  name: string;
+  slug: string;
+  plan: 'Free' | 'Pro';
+  // Add other tenant properties if needed, like maxNotes if it's part of the client-side tenant object
+}
+
 export default function NotesPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
   const [notes, setNotes] = useState<Note[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -45,30 +66,44 @@ export default function NotesPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
-  const router = useRouter();
+  const [notesLoading, setNotesLoading] = useState(true);
 
   useEffect(() => {
-    const currentUser = AuthService.getCurrentUser();
-    if (!currentUser || !AuthService.isAuthenticated()) {
-      router.push('/');
+    if (status === 'loading') return;
+
+    if (status === 'unauthenticated') {
+      router.push('/login');
       return;
     }
-    
-    setUser(currentUser);
-    const userTenant = AuthService.getTenantById(currentUser.tenantId);
-    setTenant(userTenant);
-    loadNotes();
-  }, [router]);
+
+    if (session?.user) {
+      // Fetch tenant details if needed, or rely on session.user.tenant if it contains enough info
+      // For now, let's assume session.user.tenant has the basic info needed
+      // If you need more tenant details (like maxNotes), you'd fetch it from /api/tenants/:slug
+      const userTenant = session.user.tenant as Tenant; // Cast to Tenant type
+      setTenant(userTenant);
+      loadNotes();
+    }
+  }, [session, status, router]);
 
   const loadNotes = async () => {
-    const result = await NotesService.getNotes();
-    if (result.success && result.notes) {
-      setNotes(result.notes);
-    } else if (result.error === 'Unauthorized') {
-      AuthService.logout();
-      router.push('/');
-    } else {
-      setError(result.error || 'Failed to load notes');
+    setNotesLoading(true);
+    try {
+      const response = await fetch('/api/notes');
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setNotes(data.notes);
+      } else if (response.status === 401) {
+        signOut({ callbackUrl: '/login' }); // Redirect to login on unauthorized
+      } else {
+        setError(data.error || 'Failed to load notes');
+      }
+    } catch (err) {
+      console.error('Error loading notes:', err);
+      setError('Failed to load notes. Please try again.');
+    } finally {
+      setNotesLoading(false);
     }
   };
 
@@ -83,15 +118,26 @@ export default function NotesPage() {
     setError('');
 
     try {
-      const result = await NotesService.createNote(formData.title, formData.content);
-      if (result.success && result.note) {
-        setNotes(prev => [result.note!, ...prev]);
+      const response = await fetch('/api/notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setNotes(prev => [data.note, ...prev]);
         setFormData({ title: '', content: '' });
         setIsCreateDialogOpen(false);
+      } else if (response.status === 403) {
+        setError(data.error || 'Note limit reached.');
       } else {
-        setError(result.error || 'Failed to create note');
+        setError(data.error || 'Failed to create note');
       }
-    } catch {
+    } catch (err) {
+      console.error('Error creating note:', err);
       setError('Failed to create note. Please try again.');
     } finally {
       setLoading(false);
@@ -99,29 +145,46 @@ export default function NotesPage() {
   };
 
   const handleDelete = async (noteId: string) => {
-    const result = await NotesService.deleteNote(noteId);
-    if (result.success) {
-      setNotes(prev => prev.filter(n => n.id !== noteId));
-    } else {
-      setError(result.error || 'Failed to delete note');
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/notes/${noteId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setNotes(prev => prev.filter(n => n._id !== noteId));
+      } else {
+        setError(data.error || 'Failed to delete note');
+      }
+    } catch (err) {
+      console.error('Error deleting note:', err);
+      setError('Failed to delete note. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleUpgrade = async () => {
     if (!tenant) return;
-    
+
     setUpgrading(true);
     try {
-      const result = await NotesService.upgradeTenant(tenant.slug);
-      if (result.success) {
-        // Update tenant in localStorage and state
-        const updatedTenant = { ...tenant, plan: 'Pro' as const, maxNotes: -1 };
-        setTenant(updatedTenant);
-        // In a real app, you'd also update the user's tenant data
+      const response = await fetch(`/api/tenants/${tenant.slug}/upgrade`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setTenant(prev => (prev ? { ...prev, plan: 'Pro' } : null));
+        // Optionally, re-fetch notes to ensure any limits are immediately reflected
+        loadNotes();
+        router.refresh(); // Refresh the session to get the new plan
       } else {
-        setError(result.error || 'Failed to upgrade');
+        setError(data.error || 'Failed to upgrade');
       }
-    } catch {
+    } catch (err) {
+      console.error('Error upgrading tenant:', err);
       setError('Failed to upgrade. Please try again.');
     } finally {
       setUpgrading(false);
@@ -129,8 +192,7 @@ export default function NotesPage() {
   };
 
   const handleLogout = () => {
-    AuthService.logout();
-    router.push('/');
+    signOut({ callbackUrl: '/login' });
   };
 
   const resetForm = () => {
@@ -138,7 +200,8 @@ export default function NotesPage() {
     setError('');
   };
 
-  if (!user || !tenant) {
+  // Show loading state for notes or initial session loading
+  if (status === 'loading' || notesLoading || !session?.user || !tenant) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex items-center space-x-2 text-gray-500">
@@ -149,8 +212,12 @@ export default function NotesPage() {
     );
   }
 
-  const canCreateNote = tenant.plan === 'Pro' || notes.length < tenant.maxNotes;
-  const shouldShowUpgrade = tenant.plan === 'Free' && notes.length >= tenant.maxNotes;
+  // Assuming tenant.maxNotes is available from the session or fetched tenant object
+  // If not, you might need to fetch full tenant details or define a default maxNotes for Free plan
+  const maxNotesForFreePlan = 3; // Define the limit for Free plan
+  const currentMaxNotes = tenant.plan === 'Pro' ? -1 : maxNotesForFreePlan; // -1 for unlimited
+  const canCreateNote = tenant.plan === 'Pro' || notes.length < currentMaxNotes;
+  const shouldShowUpgrade = tenant.plan === 'Free' && notes.length >= currentMaxNotes;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -159,16 +226,16 @@ export default function NotesPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div 
+              <div
                 className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold shadow-lg"
-                style={{ backgroundColor: tenant.color }}
+                style={{ backgroundColor: '#3B82F6' }} // Placeholder color, ideally from tenant object
               >
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">{tenant.name}</h1>
                 <div className="flex items-center space-x-2">
-                  <Badge 
+                  <Badge
                     variant={tenant.plan === 'Pro' ? 'default' : 'secondary'}
                     className="text-xs"
                   >
@@ -180,7 +247,7 @@ export default function NotesPage() {
                   </Badge>
                   {tenant.plan === 'Free' && (
                     <span className="text-xs text-gray-500">
-                      {notes.length}/{tenant.maxNotes} notes used
+                      {notes.length}/{maxNotesForFreePlan} notes used
                     </span>
                   )}
                 </div>
@@ -193,12 +260,12 @@ export default function NotesPage() {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-blue-100 text-blue-700 text-sm">
-                        {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {session.user.name ? session.user.name.split(' ').map(n => n[0]).join('').toUpperCase() : session.user.email[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="text-left hidden sm:block">
-                      <p className="text-sm font-medium">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.role}</p>
+                      <p className="text-sm font-medium">{session.user.name || session.user.email}</p>
+                      <p className="text-xs text-gray-500">{session.user.role}</p>
                     </div>
                   </div>
                 </Button>
@@ -206,20 +273,15 @@ export default function NotesPage() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-xs text-gray-500 font-normal">{user.email}</p>
+                    <p className="font-medium">{session.user.name || session.user.email}</p>
+                    <p className="text-xs text-gray-500 font-normal">{session.user.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
@@ -239,10 +301,10 @@ export default function NotesPage() {
               <h2 className="text-2xl font-bold text-gray-900">Notes</h2>
               <p className="text-gray-500 mt-1">Create and manage your team's notes</p>
             </div>
-            
+
             <div className="flex items-center space-x-3">
               {shouldShowUpgrade && (
-                <Button 
+                <Button
                   onClick={handleUpgrade}
                   disabled={upgrading}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -255,16 +317,16 @@ export default function NotesPage() {
                   Upgrade to Pro
                 </Button>
               )}
-              
-              <Dialog 
-                open={isCreateDialogOpen} 
+
+              <Dialog
+                open={isCreateDialogOpen}
                 onOpenChange={(open) => {
                   setIsCreateDialogOpen(open);
                   if (!open) resetForm();
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button 
+                  <Button
                     className="bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all duration-200"
                     disabled={!canCreateNote}
                   >
@@ -279,7 +341,7 @@ export default function NotesPage() {
                       Add a new note to your collection.
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <form onSubmit={handleSubmit} className="space-y-4">
                     {error && (
                       <Alert variant="destructive">
@@ -311,9 +373,9 @@ export default function NotesPage() {
                     </div>
 
                     <div className="flex justify-end space-x-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         onClick={() => setIsCreateDialogOpen(false)}
                       >
                         Cancel
@@ -364,7 +426,7 @@ export default function NotesPage() {
                       </p>
                     </div>
                   </div>
-                  <Button 
+                  <Button
                     onClick={handleUpgrade}
                     disabled={upgrading}
                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -390,13 +452,13 @@ export default function NotesPage() {
                   {searchTerm ? 'No notes found' : 'No notes yet'}
                 </h3>
                 <p className="text-gray-500 mb-4">
-                  {searchTerm 
+                  {searchTerm
                     ? 'Try adjusting your search terms'
                     : 'Create your first note to get started'
                   }
                 </p>
                 {!searchTerm && canCreateNote && (
-                  <Button 
+                  <Button
                     onClick={() => setIsCreateDialogOpen(true)}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
@@ -409,7 +471,7 @@ export default function NotesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredNotes.map((note) => (
-                <Card key={note.id} className="group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
+                <Card key={note._id} className="group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -418,7 +480,7 @@ export default function NotesPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDelete(note.id)}
+                        onClick={() => handleDelete(note._id)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />

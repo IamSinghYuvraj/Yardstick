@@ -1,19 +1,12 @@
-
-import NextAuth from 'next-auth';
+import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcrypt';
-import clientPromise from '@/lib/mongodb';
-import { User } from '@/lib/models';
-import mongoose from 'mongoose';
+import dbConnect from '../../../../lib/mongodb';
+import { User } from '../../../../models';
+import { JWT } from 'next-auth/jwt';
+import { Session } from 'next-auth';
 
-async function connectToDatabase() {
-    const client = await clientPromise;
-    if (mongoose.connection.readyState === 0) {
-        await mongoose.connect(process.env.MONGODB_URI!)
-    }
-}
-
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -26,27 +19,32 @@ export const authOptions = {
           return null;
         }
 
-        await connectToDatabase();
+        try {
+          await dbConnect();
 
-        const user = await User.findOne({ email: credentials.email }).select('+password').populate('tenant');
+          const user = await User.findOne({ email: credentials.email }).select('+password').populate('tenant');
 
-        if (!user) {
+          if (!user) {
+            return null;
+          }
+
+          const isValid = await bcrypt.compare(credentials.password, user.password);
+
+          if (!isValid) {
+            return null;
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            tenant: user.tenant,
+          };
+        } catch (error) {
+          console.error('Authorize error:', error);
           return null;
         }
-
-        const isValid = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isValid) {
-          return null;
-        }
-
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          tenant: user.tenant,
-        };
       }
     })
   ],
@@ -54,7 +52,7 @@ export const authOptions = {
     strategy: 'jwt',
   },
   callbacks: {
-    async jwt({ token, user }: any) {
+    async jwt({ token, user }: { token: JWT; user?: any }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -62,10 +60,12 @@ export const authOptions = {
       }
       return token;
     },
-    async session({ session, token }: any) {
-      session.user.id = token.id;
-      session.user.role = token.role;
-      session.user.tenant = token.tenant;
+    async session({ session, token }: { session: Session; token: JWT }) {
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+        session.user.tenant = token.tenant as any;
+      }
       return session;
     },
   },

@@ -13,12 +13,18 @@ This application uses a **shared schema with tenant ID column** approach for mul
 - **Benefits**: Cost-effective, easier maintenance, and simpler deployment
 - **Trade-offs**: Requires careful implementation to ensure data isolation
 
+## Architecture
+
+### Multi-Tenancy Approach
+This application uses a **shared schema with a tenant ID column** approach for multi-tenancy. Each record in the database has a `tenantId` field to ensure data isolation.
+
 ### Technology Stack
 - **Frontend**: Next.js 13+ with TypeScript, Tailwind CSS, shadcn/ui
 - **Backend**: Next.js API Routes with JWT authentication
-- **Database**: PostgreSQL with Supabase (production) / In-memory (demo)
+- **Database**: MongoDB
 - **Deployment**: Vercel
 - **Authentication**: JWT-based with role-based access control
+
 
 ## Features
 
@@ -65,6 +71,7 @@ This application uses a **shared schema with tenant ID column** approach for mul
 
 ### Tenant Management
 - `POST /api/tenants/:slug/upgrade` - Upgrade tenant subscription (Admin only)
+- `POST /api/tenants/:slug/invite` - Invite a new user to the tenant (Admin only)
 
 ## Test Accounts
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AuthService, User, Tenant } from '@/lib/auth';
-import { Building2, FileText, LogOut, Settings, User as UserIcon } from 'lucide-react';
+import { Building2, FileText, LogOut, Settings, User as UserIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -22,40 +22,60 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
+// Define types for User and Tenant based on your session structure
+interface SessionUser {
+  id: string;
+  email: string;
+  name?: string;
+  role: 'Admin' | 'Member';
+  tenant: {
+    _id: string;
+    name: string;
+    slug: string;
+    plan: 'Free' | 'Pro';
+    // Add other tenant properties if they are part of the session user object
+  };
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const currentUser = AuthService.getCurrentUser();
-    if (!currentUser) {
+    if (status === 'loading') return;
+
+    if (status === 'unauthenticated') {
       router.push('/login');
-      return;
     }
-    
-    setUser(currentUser);
-    setTenant(AuthService.getTenantById(currentUser.tenantId));
-  }, [router]);
+  }, [status, router]);
 
   const handleLogout = () => {
-    AuthService.logout();
-    router.push('/login');
+    signOut({ callbackUrl: '/login' });
   };
 
-  if (!user || !tenant) {
+  if (status === 'loading' || !session?.user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex items-center space-x-2 text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading...</span>
+        </div>
       </div>
     );
   }
 
+  const user = session.user as SessionUser; // Cast session.user to our defined SessionUser type
+  const tenant = user.tenant; // Tenant info is directly on the user object from session
+
   const navigation = [
-    { name: 'Notes', href: '/dashboard', icon: FileText, current: pathname === '/dashboard' },
+    { name: 'Notes', href: '/notes', icon: FileText, current: pathname === '/notes' },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings, current: pathname === '/dashboard/settings' },
   ];
+
+  if (user.role === 'Admin') {
+    navigation.push({ name: 'Invite User', href: '/dashboard/settings', icon: UserIcon, current: pathname === '/dashboard/settings' });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -63,11 +83,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg border-r">
         <div className="flex flex-col h-full">
           {/* Tenant Header */}
-          <div className="p-6 border-b" style={{ backgroundColor: `${tenant.color}10` }}>
+          <div className="p-6 border-b" style={{ backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}10` }}> {/* Placeholder color */} 
             <div className="flex items-center space-x-3">
               <div 
                 className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                style={{ backgroundColor: tenant.color }}
+                style={{ backgroundColor: `#${Math.floor(Math.random()*16777215).toString(16)}` }} // Placeholder color
               >
                 <Building2 className="w-5 h-5" />
               </div>
@@ -107,11 +127,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-blue-100 text-blue-700">
-                        {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : user.email[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left">
-                      <p className="text-sm font-medium">{user.name}</p>
+                      <p className="text-sm font-medium">{user.name || user.email}</p>
                       <div className="flex items-center space-x-2">
                         <p className="text-xs text-gray-500">{user.email}</p>
                         <Badge 
@@ -128,15 +148,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <DropdownMenuContent align="start" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out

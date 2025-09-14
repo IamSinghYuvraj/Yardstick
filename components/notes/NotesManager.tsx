@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,31 +10,73 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AuthService, NotesService, Note, User } from '@/lib/auth';
-import { Plus, Search, Edit, Trash2, FileText } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useSession } from 'next-auth/react';
+
+// Define types for Note and User based on your models and session structure
+interface Note {
+  _id: string;
+  title: string;
+  content: string;
+  tenant: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SessionUser {
+  id: string;
+  email: string;
+  name?: string;
+  role: 'Admin' | 'Member';
+  tenant: {
+    _id: string;
+    name: string;
+    slug: string;
+    plan: 'Free' | 'Pro';
+  };
+}
 
 export function NotesManager() {
+  const { data: session, status } = useSession();
+  const user = session?.user as SessionUser | undefined; // Cast session.user to our defined SessionUser type
+  const router = useRouter();
+
   const [notes, setNotes] = useState<Note[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [showUpgradeAlert, setShowUpgradeAlert] = useState(false);
 
   useEffect(() => {
-    const currentUser = AuthService.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-      loadNotes(currentUser);
+    if (status === 'loading') return;
+    if (status === 'authenticated' && user) {
+      loadNotes();
     }
-  }, []);
+  }, [status, user]);
 
-  const loadNotes = (currentUser: User) => {
-    const userNotes = NotesService.getNotes(currentUser.tenantId);
-    setNotes(userNotes);
+  const loadNotes = async () => {
+    setNotesLoading(true);
+    try {
+      const response = await fetch('/api/notes');
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setNotes(data.notes);
+      } else {
+        setError(data.error || 'Failed to load notes');
+      }
+    } catch (err) {
+      console.error('Error loading notes:', err);
+      setError('Failed to load notes. Please try again.');
+    } finally {
+      setNotesLoading(false);
+    }
   };
 
   const filteredNotes = notes.filter(note =>
@@ -47,32 +90,50 @@ export function NotesManager() {
 
     setLoading(true);
     setError('');
+    setShowUpgradeAlert(false);
 
     try {
+      let response;
       if (editingNote) {
         // Update existing note
-        const updated = NotesService.updateNote(editingNote.id, {
-          title: formData.title,
-          content: formData.content
+        response = await fetch(`/api/notes/${editingNote._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
         });
-        if (updated) {
-          setNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
-        }
       } else {
         // Create new note
-        const newNote = NotesService.createNote({
-          title: formData.title,
-          content: formData.content,
-          userId: user.id,
-          tenantId: user.tenantId
+        response = await fetch('/api/notes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
         });
-        setNotes(prev => [newNote, ...prev]);
       }
+      const data = await response.json();
 
-      setFormData({ title: '', content: '' });
-      setIsCreateDialogOpen(false);
-      setEditingNote(null);
-    } catch {
+      if (response.ok && data.success) {
+        if (editingNote) {
+          setNotes(prev => prev.map(n => n._id === data.note._id ? data.note : n));
+        } else {
+          setNotes(prev => [data.note, ...prev]);
+        }
+        setFormData({ title: '', content: '' });
+        setIsCreateDialogOpen(false);
+        setEditingNote(null);
+      } else if (response.status === 403) {
+        setError(data.error || 'Note limit reached.');
+        if (user?.tenant.plan === 'Free') {
+          setShowUpgradeAlert(true);
+        }
+      } else {
+        setError(data.error || 'Failed to save note');
+      }
+    } catch (err) {
+      console.error('Error saving note:', err);
       setError('Failed to save note. Please try again.');
     } finally {
       setLoading(false);
@@ -85,12 +146,25 @@ export function NotesManager() {
     setIsCreateDialogOpen(true);
   };
 
-  const handleDelete = (noteId: string) => {
+  const handleDelete = async (noteId: string) => {
     if (!user) return;
-    
-    const success = NotesService.deleteNote(noteId, user.tenantId);
-    if (success) {
-      setNotes(prev => prev.filter(n => n.id !== noteId));
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/notes/${noteId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setNotes(prev => prev.filter(n => n._id !== noteId));
+      } else {
+        setError(data.error || 'Failed to delete note');
+      }
+    } catch (err) {
+      console.error('Error deleting note:', err);
+      setError('Failed to delete note. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -98,9 +172,19 @@ export function NotesManager() {
     setFormData({ title: '', content: '' });
     setEditingNote(null);
     setError('');
+    setShowUpgradeAlert(false);
   };
 
-  if (!user) return null;
+  if (status === 'loading' || notesLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex items-center space-x-2 text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading notes...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -132,9 +216,25 @@ export function NotesManager() {
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
+              {error && !showUpgradeAlert && (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {showUpgradeAlert && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertDescription className="flex items-center justify-between">
+                    <span>{error}</span>
+                    {user?.role === 'Admin' && (
+                      <Button
+                        size="sm"
+                        onClick={() => router.push('/dashboard/settings')}
+                      >
+                        Upgrade to Pro
+                      </Button>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -170,7 +270,14 @@ export function NotesManager() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>
-                  {loading ? 'Saving...' : editingNote ? 'Update Note' : 'Create Note'}
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    editingNote ? 'Update Note' : 'Create Note'
+                  )}
                 </Button>
               </div>
             </form>
@@ -214,7 +321,7 @@ export function NotesManager() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredNotes.map((note) => (
-            <Card key={note.id} className="group hover:shadow-lg transition-shadow cursor-pointer">
+            <Card key={note._id} className="group hover:shadow-lg transition-shadow cursor-pointer">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -236,7 +343,7 @@ export function NotesManager() {
                       variant="ghost"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(note.id);
+                        handleDelete(note._id);
                       }}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
@@ -246,9 +353,9 @@ export function NotesManager() {
                 </div>
                 <CardDescription className="flex items-center space-x-2">
                   <span>Updated {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}</span>
-                  {user.role === 'Admin' && (
+                  {user?.role === 'Admin' && (
                     <Badge variant="outline" className="text-xs">
-                      {notes.find(n => n.userId === note.userId)?.userId === user.id ? 'Your note' : 'Team note'}
+                      {note.author === user.id ? 'Your note' : 'Team note'}
                     </Badge>
                   )}
                 </CardDescription>
