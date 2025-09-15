@@ -311,7 +311,17 @@ export default function NotesPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    if (currentUser.tenant.plan === 'Free' && notes.length >= 3) {
+                      setShowUpgradeAlert(true);
+                      setError('You have reached the 3-note limit for the Free plan. Please upgrade to Pro for unlimited notes.');
+                    } else {
+                      setIsCreateDialogOpen(true);
+                    }
+                  }}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   New Note
                 </Button>

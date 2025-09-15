@@ -78,11 +78,11 @@ This application uses a **shared schema with a tenant ID column** approach for m
 All test accounts use the password: `password`
 
 ### Acme Corporation (Free Plan)
-- **Admin**: `admin@acme.test`
+- **Admin**: `admin@acme.test` (Free Plan)
 - **Member**: `user@acme.test`
 
 ### Globex Corporation (Pro Plan)
-- **Admin**: `admin@globex.test`
+- **Admin**: `admin@globex.test` (Free Plan)
 - **Member**: `user@globex.test`
 
 ## Role Permissions

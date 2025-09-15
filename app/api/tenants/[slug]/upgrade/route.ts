@@ -22,18 +22,24 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
     }
 
     // Update tenant plan to "Pro"
+    const tenant = await Tenant.findOne({ slug: params.slug });
+    if (!tenant) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Update all users in the tenant to Pro plan
+    await User.updateMany(
+      { tenant: user.tenantId },
+      { $set: { plan: 'Pro' } }
+    );
+
     const updatedTenant = await Tenant.findOneAndUpdate(
       { slug: params.slug },
       { 
         plan: 'Pro',
-        maxNotes: 1000000 // Simulate unlimited notes for Pro plan
       },
       { new: true }
     );
-
-    if (!updatedTenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
-    }
 
     return NextResponse.json({ 
       success: true, 

@@ -40,3 +40,12 @@ export interface IInvite extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface IUpgradeRequest extends Document {
+  _id: Types.ObjectId;
+  user: Types.ObjectId | IUser;
+  tenant: Types.ObjectId | ITenant;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  updatedAt: Date;
+}

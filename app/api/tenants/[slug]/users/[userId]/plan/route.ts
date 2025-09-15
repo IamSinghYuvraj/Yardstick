@@ -35,6 +35,23 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
       return NextResponse.json({ success: false, error: 'User not found in this tenant' }, { status: 404 });
     }
 
+    // If the user being updated is the current admin, update their token
+    let updatedToken = null;
+    if (updatedUser._id.toString() === adminUser.id) {
+      const jwt = require('jsonwebtoken');
+      const newPayload = {
+        id: adminUser.id,
+        email: adminUser.email,
+        role: adminUser.role,
+        tenantId: adminUser.tenantId,
+        tenantSlug: adminUser.tenantSlug,
+        plan: plan
+      };
+      updatedToken = jwt.sign(newPayload, process.env.JWT_SECRET || 'fallback-secret', {
+        expiresIn: '7d'
+      });
+    }
+
     return NextResponse.json({ 
       success: true, 
       user: {
@@ -43,7 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
         role: updatedUser.role,
         plan: updatedUser.plan,
         updatedAt: updatedUser.updatedAt
-      }
+      },
+      ...(updatedToken && { token: updatedToken })
     });
 
   } catch (error) {

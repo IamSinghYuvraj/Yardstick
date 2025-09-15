@@ -354,29 +354,31 @@ export default function SettingsPage() {
                             tenantSlug={currentUser.tenant.slug}
                             onPlanChange={handlePlanChangeSuccess}
                           />
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="icon" disabled={submitting}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently remove
-                                  <span className="font-bold"> {user.email} </span>
-                                  from your organization.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.email)}>
-                                  Continue
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          {user.id !== currentUser.id && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon" disabled={submitting}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently remove
+                                    <span className="font-bold"> {user.email} </span>
+                                    from your organization.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteUser(user.id, user.email)}>
+                                    Continue
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </div>
                     ))}

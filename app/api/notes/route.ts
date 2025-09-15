@@ -53,12 +53,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Check note limits for Free plan
-    if (user.plan === 'Free') {
+    const currentUser = await User.findById(user.id).populate('tenant');
+    if (!currentUser) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
+
+    if (currentUser.plan === 'Free') {
       const noteCount = await Note.countDocuments({ author: user.id });
       if (noteCount >= 3) { // Assuming max 3 notes for free plan
         return NextResponse.json({ 
           success: false, 
-          error: `You have reached the limit of 3 notes for the Free plan. Please upgrade to Pro for unlimited notes.` 
+          error: `You have reached the limit of 3 notes for the Free plan. Please upgrade to Pro for unlimited notes.`,
+          limitReached: true
         }, { status: 403 });
       }
     }

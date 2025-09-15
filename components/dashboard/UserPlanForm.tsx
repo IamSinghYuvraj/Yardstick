@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 
 interface UserPlanFormProps {
@@ -74,12 +75,15 @@ export function UserPlanForm({ userId, currentPlan, tenantSlug, onPlanChange }: 
 
   return (
     <div className="flex items-center space-x-2">
+      <Badge variant={selectedPlan === 'Pro' ? 'default' : 'secondary'} className="min-w-[60px] justify-center">
+        {selectedPlan}
+      </Badge>
       <Select
         value={selectedPlan}
         onValueChange={(newPlan: 'Free' | 'Pro') => setSelectedPlan(newPlan)}
         disabled={isSubmitting}
       >
-        <SelectTrigger className="w-[120px]">
+        <SelectTrigger className="w-[100px]">
           <SelectValue placeholder="Select plan" />
         </SelectTrigger>
         <SelectContent>
@@ -87,8 +91,12 @@ export function UserPlanForm({ userId, currentPlan, tenantSlug, onPlanChange }: 
           <SelectItem value="Pro">Pro</SelectItem>
         </SelectContent>
       </Select>
-      <Button onClick={handlePlanChange} disabled={isSubmitting || selectedPlan === currentPlan}>
-        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+      <Button 
+        onClick={handlePlanChange} 
+        disabled={isSubmitting || selectedPlan === currentPlan}
+        size="sm"
+      >
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update'}
       </Button>
     </div>
   );

@@ -155,13 +155,11 @@ async function seed() {
   
   console.log('\n🔐 Test Accounts:');
   console.log('   Acme Corporation:');
-  console.log('   • admin@acme.test / password (Admin, Pro)');
+  console.log('   • admin@acme.test / password (Admin, Free)');
   console.log('   • user@acme.test / password (Member, Free, 3 note limit)');
-  console.log('   • john@acme.test / password (Member, Free, 3 note limit)');
-  console.log('   • sarah@acme.test / password (Member, Pro)');
   
   console.log('\n   Globex Industries:');
-  console.log('   • admin@globex.test / password (Admin, Pro)');
+  console.log('   • admin@globex.test / password (Admin, Free)');
   console.log('   • user@globex.test / password (Member, Free, 3 note limit)');
   
   console.log('\n🔗 Test Invitation Links:');
