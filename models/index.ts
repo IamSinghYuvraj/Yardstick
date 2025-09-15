@@ -36,6 +36,14 @@ const InviteSchema: Schema = new Schema({
   status: { type: String, enum: ['Pending', 'Accepted', 'Expired'], default: 'Pending' },
 }, { timestamps: true });
 
+const UpgradeRequestSchema: Schema = new Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+}, { timestamps: true });
+
+export const UpgradeRequest = models.UpgradeRequest || mongoose.model<IUpgradeRequest>('UpgradeRequest', UpgradeRequestSchema);
+
 // Create compound index to ensure unique pending invites per email/tenant
 InviteSchema.index({ email: 1, tenant: 1, status: 1 }, { 
   unique: true, 

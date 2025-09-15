@@ -17,27 +17,16 @@ import {
 import { Building2, FileText, LogOut, Settings, User as UserIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
+import { ClientUser } from '@/types/index';
+
 interface DashboardLayoutProps {
   children: React.ReactNode;
-}
-
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-  role: 'Admin' | 'Member';
-  tenant: {
-    _id: string;
-    name: string;
-    slug: string;
-    plan: 'Free' | 'Pro';
-  };
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ClientUser | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -49,7 +38,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     try {
-      const parsedUser = JSON.parse(userData) as User;
+      const parsedUser = JSON.parse(userData) as ClientUser;
       setUser(parsedUser);
     } catch (err) {
       console.error('Error parsing user data:', err);
@@ -131,7 +120,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-blue-100 text-blue-700">
-                        {user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : user.email[0].toUpperCase()}
+                        {user.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : user.email[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left">

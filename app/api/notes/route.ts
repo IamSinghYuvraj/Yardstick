@@ -1,6 +1,6 @@
 // app/api/notes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { Note } from '@/models';
+import { Note, User } from '@/models';
 import { requireAuth } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
 

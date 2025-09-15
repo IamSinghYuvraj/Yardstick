@@ -1,7 +1,7 @@
 // app/notes/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,10 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Search, Edit, Trash2, FileText, Loader2, AlertCircle, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import {DashboardLayout} from '@/components/dashboard/DashboardLayout';
 import { useToast } from '@/hooks/use-toast';
+
+import { ClientUser } from '@/types/index';
 
 interface Author {
   _id: string;
@@ -32,25 +34,13 @@ interface Note {
   updatedAt: string;
 }
 
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-  role: 'Admin' | 'Member';
-  tenant: {
-    _id: string;
-    name: string;
-    slug: string;
-    plan: 'Free' | 'Pro';
-  };
-}
-
 export default function NotesPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<ClientUser | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
@@ -59,34 +49,15 @@ export default function NotesPage() {
   const [notesLoading, setNotesLoading] = useState(true);
   const [showUpgradeAlert, setShowUpgradeAlert] = useState(false);
 
-  const getAuthHeaders = () => {
+  const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     };
-  };
+  }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-
-    if (!token || !userData) {
-      router.push('/login');
-      return;
-    }
-
-    try {
-      const parsedUser = JSON.parse(userData) as User;
-      setCurrentUser(parsedUser);
-      loadNotes();
-    } catch (err) {
-      console.error('Error parsing user data:', err);
-      router.push('/login');
-    }
-  }, [router]);
-
-  const loadNotes = async () => {
+  const loadNotes = useCallback(async () => {
     setNotesLoading(true);
     try {
       const response = await fetch('/api/notes', {
@@ -120,12 +91,43 @@ export default function NotesPage() {
     } finally {
       setNotesLoading(false);
     }
-  };
+  }, [getAuthHeaders, router, toast]);
 
-  const filteredNotes = notes.filter(note =>
-    note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.content.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+
+    if (!token || !userData) {
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData) as ClientUser;
+      setCurrentUser(parsedUser);
+      loadNotes();
+    } catch (err) {
+      console.error('Error parsing user data:', err);
+      router.push('/login');
+    }
+  }, [router, loadNotes]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note =>
+      note.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      note.content.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    );
+  }, [notes, debouncedSearchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,15 +350,13 @@ export default function NotesPage() {
                       <AlertDescription className="text-orange-800">
                         <div className="flex items-center justify-between">
                           <span>{error}</span>
-                          {currentUser?.role === 'Admin' && (
-                            <Button
+                          <Button
                               size="sm"
                               onClick={() => router.push('/dashboard/settings')}
                               className="ml-2"
                             >
                               Upgrade to Pro
                             </Button>
-                          )}
                         </div>
                       </AlertDescription>
                     </Alert>
@@ -453,7 +453,7 @@ export default function NotesPage() {
               <p className="text-gray-500 mb-4">
                 {searchTerm 
                   ? 'Try adjusting your search terms'
-                  : currentUser.role === 'Admin' 
+                  : currentUser.role === 'Admin'
                     ? 'Your team members can create notes here'
                     : 'Create your first note to get started'
                 }

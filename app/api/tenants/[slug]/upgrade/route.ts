@@ -1,6 +1,6 @@
 // app/api/tenants/[slug]/upgrade/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { Tenant } from '@/models';
+import { Tenant, User } from '@/models';
 import { requireAdmin } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
 

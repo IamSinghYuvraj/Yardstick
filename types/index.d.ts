@@ -49,3 +49,16 @@ export interface IUpgradeRequest extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface ClientUser {
+  id: string;
+  email: string;
+  name?: string;
+  role: 'Admin' | 'Member';
+  tenant: {
+    _id: string;
+    name: string;
+    slug: string;
+    plan: 'Free' | 'Pro';
+  };
+}

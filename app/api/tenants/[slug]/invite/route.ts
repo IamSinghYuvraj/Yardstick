@@ -115,7 +115,8 @@ export async function POST(request: NextRequest, { params }: { params: { slug: s
     console.log('✅ Invitation saved:', newInvite._id);
 
     // Create invitation link
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+    // Use NEXT_PUBLIC_APP_BASE_URL from .env.local for the base URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
     const invitationLink = `${baseUrl}/signup?inviteToken=${invitationToken}`;
     console.log('🔗 Generated invitation link:', invitationLink);
 
