@@ -1,5 +1,6 @@
 // app/api/tenants/[slug]/users/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { User } from '@/models';
 import { requireAdmin } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { slug: st
     }
 
     // Get all users in the tenant
-    const users = await User.find({ tenant: adminUser.tenantId })
+    const users = await User.find({ tenant: new mongoose.Types.ObjectId(adminUser.tenantId) })
       .select('-password') // Exclude password field
       .populate('tenant', 'name slug plan')
       .sort({ createdAt: -1 });
@@ -33,9 +34,9 @@ export async function GET(request: NextRequest, { params }: { params: { slug: st
         email: user.email,
         
         role: user.role,
+        plan: user.tenant.plan,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
-        tenant: user.tenant
       }))
     });
 

@@ -22,8 +22,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
 
     const { role } = await request.json();
 
-    if (!role || !['Admin', 'User'].includes(role)) { // Validate against new roles
-      return NextResponse.json({ success: false, error: 'Invalid role specified. Must be "Admin" or "User".' }, { status: 400 });
+    if (!role || !['Admin', 'Member'].includes(role)) {
+      return NextResponse.json({ success: false, error: 'Invalid role specified. Must be "Admin" or "Member".' }, { status: 400 });
     }
 
     // Find the user to update
@@ -41,13 +41,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
       return NextResponse.json({ success: false, error: 'Cannot change your own role.' }, { status: 403 });
     }
 
-    // Prevent changing a 'User' role to 'Admin' (roles are fixed for non-admins)
-    if (userToUpdate.role === 'User' && role === 'Admin') {
-      return NextResponse.json({ success: false, error: 'Cannot promote a user to Admin through this endpoint.' }, { status: 403 });
-    }
-
-    // If demoting an Admin to User, ensure it's not the last admin
-    if (userToUpdate.role === 'Admin' && role === 'User') {
+    // If demoting an Admin to Member, ensure it's not the last admin
+    if (userToUpdate.role === 'Admin' && role === 'Member') {
       const adminCount = await User.countDocuments({ 
         tenant: adminUser.tenantId, 
         role: 'Admin' 
@@ -70,7 +65,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
       user: {
         id: userToUpdate._id.toString(),
         email: userToUpdate.email,
-        
         role: userToUpdate.role,
         updatedAt: userToUpdate.updatedAt
       }

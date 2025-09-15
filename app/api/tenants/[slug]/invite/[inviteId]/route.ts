@@ -1,4 +1,4 @@
-// app/api/tenants/[slug]/invites/[inviteId]/route.ts
+// app/api/tenants/[slug]/invite/[inviteId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Invite, Tenant } from '@/models';
 import { requireAdmin } from '@/lib/middleware/jwt';

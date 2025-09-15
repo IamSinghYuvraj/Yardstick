@@ -44,7 +44,7 @@ async function seed() {
   console.log('✅ Tenants created.');
 
   console.log('👥 Creating users...');
-  const password = await bcrypt.hash('password123', 12);
+  const password = await bcrypt.hash('password', 12); // Changed to 'password' as per requirements
 
   // Create admin@acme.test as the main admin
   const adminAcme = await User.create({ 
@@ -85,7 +85,7 @@ async function seed() {
     password 
   });
 
-  const mikeGlobex = await User.create({ 
+  const userGlobex = await User.create({ 
     email: 'user@globex.test', 
     role: 'Member', 
     tenant: globexTenant._id, 
@@ -96,42 +96,24 @@ async function seed() {
   console.log(`   • Admin for Acme: ${adminAcme.email}`);
   console.log(`   • Users under Acme admin: ${userAcme.email}, ${johnAcme.email}, ${sarahAcme.email}`);
   console.log(`   • Admin for Globex: ${adminGlobex.email}`);
-  console.log(`   • Users under Globex admin: ${mikeGlobex.email}`);
+  console.log(`   • Users under Globex admin: ${userGlobex.email}`);
 
   console.log('📝 Creating sample notes...');
   await Note.create([
     // Notes created by Acme members (not admin, since admins can't create notes)
-    { 
-      title: 'Welcome to Acme Corporation', 
-      content: 'This is our first note in the new system. Welcome aboard!', 
-      tenant: acmeTenant._id, 
-      author: userAcme._id 
-    },
-    { 
-      title: 'Project Planning Notes', 
-      content: 'Key points for the upcoming project:\n1. Define requirements\n2. Set timeline\n3. Assign team members', 
-      tenant: acmeTenant._id, 
-      author: johnAcme._id 
-    },
-    { 
-      title: 'Meeting Minutes - Q1 Review', 
-      content: 'Quarterly review meeting notes:\n- Revenue exceeded targets\n- Team performance excellent\n- Next quarter objectives set', 
-      tenant: acmeTenant._id, 
-      author: sarahAcme._id 
-    },
     
     // Globex notes (created by member, not admin)
     { 
       title: 'Globex Strategic Vision 2024', 
       content: 'Our strategic vision for 2024 includes expanding into new markets and developing innovative solutions.', 
       tenant: globexTenant._id, 
-      author: mikeGlobex._id 
+      author: userGlobex._id 
     },
     { 
       title: 'Technical Architecture Notes', 
       content: 'System architecture considerations:\n- Microservices approach\n- Cloud-native deployment\n- Scalability requirements', 
       tenant: globexTenant._id, 
-      author: mikeGlobex._id 
+      author: userGlobex._id 
     },
   ]);
   console.log('✅ Sample notes created.');
@@ -168,25 +150,31 @@ async function seed() {
   console.log(`   • ${invitations.length} pending invitations created`);
   
   console.log('\n🔐 Test Accounts:');
-  console.log('   Acme Corporation (Free Plan):');
-  console.log('   • admin@acme.test / password123 (Admin - manages users, cannot create notes)');
-  console.log('   • user@acme.test / password123 (Member - can create notes)');
-  console.log('   • john@acme.test / password123 (Member - can create notes)');
-  console.log('   • sarah@acme.test / password123 (Member - can create notes)');
+  console.log('   Acme Corporation (Free Plan - 3 note limit):');
+  console.log('   • admin@acme.test / password (Admin - manages users, cannot create notes)');
+  console.log('   • user@acme.test / password (Member - can create notes)');
+  console.log('   • john@acme.test / password (Member - can create notes)');
+  console.log('   • sarah@acme.test / password (Member - can create notes)');
   
-  console.log('\n   Globex Industries (Pro Plan):');
-  console.log('   • admin@globex.test / password123 (Admin - manages users, cannot create notes)');
-  console.log('   • user@globex.test / password123 (Member - can create notes)');
+  console.log('\n   Globex Industries (Pro Plan - unlimited notes):');
+  console.log('   • admin@globex.test / password (Admin - manages users, cannot create notes)');
+  console.log('   • user@globex.test / password (Member - can create notes)');
   
-  console.log('\n🔗 Invitation Links:');
+  console.log('\n🔗 Test Invitation Links:');
   invitations.forEach((invite, index) => {
     const orgName = index === 0 ? 'Acme' : 'Globex';
     console.log(`   ${orgName}: http://localhost:3000/signup?inviteToken=${invite.token}`);
   });
   
   console.log('\n✨ Ready to test!');
-  console.log('1. Login as admin@acme.test to manage users and generate invites');
-  console.log('2. Login as user@acme.test to create and manage notes');
+  console.log('📋 Testing Workflow:');
+  console.log('1. Login as admin@acme.test to manage users and tenant plan');
+  console.log('2. Admin can downgrade to Free plan to test note limits');
+  console.log('3. Create an invite for a new user (e.g., test@example.com)');
+  console.log('4. Use the generated invite link to sign up the new user');
+  console.log('5. Login as user@acme.test to create and manage notes');
+  console.log('6. If on Free plan, try creating more than 3 notes to test limits');
+  console.log('7. Admin can upgrade back to Pro plan for unlimited notes');
 
   await mongoose.connection.close();
   console.log('✅ Database connection closed.');

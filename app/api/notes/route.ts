@@ -1,175 +1,11 @@
-// app/api/tenants/[slug]/invite/route.ts
+// app/api/notes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { User, Tenant, Invite } from '@/models';
-import { requireAdmin } from '@/lib/middleware/jwt';
+import { Note, Tenant } from '@/models';
+import { requireAuth } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
-import crypto from 'crypto';
 
-export async function POST(request: NextRequest, { params }: { params: { slug: string } }) {
-  console.log('🚀 Invite API called with slug:', params.slug);
-  
-  try {
-    // Connect to database first
-    console.log('📡 Connecting to database...');
-    await dbConnect();
-    console.log('✅ Database connected');
-
-    // Check authentication
-    console.log('🔐 Checking authentication...');
-    const authResult = requireAuth(request);
-    if ('error' in authResult) {
-      console.log('❌ Auth failed:', authResult.error);
-      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
-    }
-
-    const { user } = authResult;
-    console.log('✅ User authenticated:', user.email, 'Role:', user.role);
-
-    // Check if user is admin
-    if (user.role !== 'Admin') {
-      console.log('❌ User is not admin');
-      return NextResponse.json({ success: false, error: 'Only administrators can create invitations' }, { status: 403 });
-    }
-    
-    // Verify admin is inviting to their own tenant
-    if (user.tenantSlug !== params.slug) {
-      console.log('❌ Tenant slug mismatch:', user.tenantSlug, 'vs', params.slug);
-      return NextResponse.json({ success: false, error: 'You can only invite users to your own organization' }, { status: 403 });
-    }
-
-    // Parse request body
-    console.log('📝 Parsing request body...');
-    const body = await request.json();
-    const { email } = body;
-    console.log('📧 Email from request:', email);
-
-    if (!email) {
-      console.log('❌ No email provided');
-      return NextResponse.json({ success: false, error: 'Email address is required' }, { status: 400 });
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      console.log('❌ Invalid email format:', email);
-      return NextResponse.json({ success: false, error: 'Please provide a valid email address' }, { status: 400 });
-    }
-
-    // Find the tenant
-    console.log('🏢 Finding tenant with slug:', params.slug);
-    const tenant = await Tenant.findOne({ slug: params.slug });
-    if (!tenant) {
-      console.log('❌ Tenant not found:', params.slug);
-      return NextResponse.json({ success: false, error: 'Organization not found' }, { status: 404 });
-    }
-    console.log('✅ Tenant found:', tenant.name);
-
-    // Check if user already exists with this email in ANY tenant
-    console.log('👤 Checking if user exists with email:', email.toLowerCase());
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      console.log('❌ User already exists:', existingUser.email);
-      return NextResponse.json({ 
-        success: false, 
-        error: 'A user with this email address already exists in the system' 
-      }, { status: 409 });
-    }
-
-    // Check if an active invite already exists for this email and tenant
-    console.log('📬 Checking for existing invitations...');
-    const existingInvite = await Invite.findOne({ 
-      email: email.toLowerCase(), 
-      tenant: tenant._id, 
-      status: 'Pending',
-      expires: { $gt: new Date() } 
-    });
-
-    if (existingInvite) {
-      console.log('❌ Active invitation already exists');
-      return NextResponse.json({ 
-        success: false, 
-        error: 'An active invitation already exists for this email address' 
-      }, { status: 409 });
-    }
-
-    // Clean up expired invites for this email/tenant combination
-    console.log('🧹 Cleaning up expired invitations...');
-    const cleanupResult = await Invite.deleteMany({
-      email: email.toLowerCase(),
-      tenant: tenant._id,
-      $or: [
-        { status: 'Expired' },
-        { expires: { $lt: new Date() } }
-      ]
-    });
-    console.log('🗑️ Cleaned up', cleanupResult.deletedCount, 'expired invitations');
-
-    // Generate a unique invitation token
-    console.log('🎲 Generating invitation token...');
-    const invitationToken = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
-
-    // Save the invitation to the database
-    console.log('💾 Saving invitation to database...');
-    const newInvite = await Invite.create({
-      email: email.toLowerCase(),
-      tenant: tenant._id,
-      token: invitationToken,
-      expires,
-      status: 'Pending',
-    });
-    console.log('✅ Invitation saved:', newInvite._id);
-
-    // Create invitation link
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-    const invitationLink = `${baseUrl}/signup?inviteToken=${invitationToken}`;
-    console.log('🔗 Generated invitation link:', invitationLink);
-
-    return NextResponse.json({ 
-      success: true, 
-      message: `Invitation link created successfully for ${email}`,
-      inviteLink: invitationLink,
-      expiresAt: expires.toISOString(),
-      tenantName: tenant.name
-    });
-
-  } catch (error) {
-    console.error('💥 Create invite error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'An unexpected error occurred while creating the invitation. Please try again.' 
-    }, { status: 500 });
-  }
-}
-
-// Import requireAuth instead of requireAdmin for better debugging
-function requireAuth(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    console.log('🔍 Auth header:', authHeader ? 'Present' : 'Missing');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { error: 'No authorization token provided', status: 401 };
-    }
-
-    const token = authHeader.substring(7);
-    console.log('🎟️ Token extracted, length:', token.length);
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
-    console.log('🔓 Token decoded successfully for user:', decoded.email);
-
-    return { user: decoded };
-  } catch (error) {
-    console.error('🚫 Auth error:', error.message);
-    return { error: 'Invalid or expired token', status: 401 };
-  }
-}
-
-// GET endpoint to retrieve pending invitations
-export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
-  console.log('📋 GET invites called for slug:', params.slug);
-  
+// GET all notes for the authenticated user's tenant
+export async function GET(request: NextRequest) {
   try {
     await dbConnect();
     
@@ -179,44 +15,82 @@ export async function GET(request: NextRequest, { params }: { params: { slug: st
     }
 
     const { user } = authResult;
-    
+
+    // Tenant isolation: Only retrieve notes from the user's tenant
+    let query: any = { tenant: user.tenantId };
+
+    // If the user is not an Admin, restrict notes to their own
     if (user.role !== 'Admin') {
-      return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
-    }
-    
-    if (user.tenantSlug !== params.slug) {
-      return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      query.author = user.id;
     }
 
-    const tenant = await Tenant.findOne({ slug: params.slug });
+    const notes = await Note.find(query)
+      .populate('author', 'email')
+      .sort({ updatedAt: -1 });
+
+    return NextResponse.json({ success: true, notes });
+  } catch (error) {
+    console.error('Get notes error:', error);
+    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
+  }
+}
+
+// POST - Create a new note (Members only, not Admins)
+export async function POST(request: NextRequest) {
+  try {
+    await dbConnect();
+    
+    const authResult = requireAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    }
+
+    const { user } = authResult;
+
+    // Only Members can create notes, not Admins
+    if (user.role === 'Admin') {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Administrators cannot create notes. Only members can create notes.' 
+      }, { status: 403 });
+    }
+
+    const { title, content } = await request.json();
+
+    if (!title || !content) {
+      return NextResponse.json({ success: false, error: 'Title and content are required' }, { status: 400 });
+    }
+
+    // Get the tenant to check plan limits
+    const tenant = await Tenant.findById(user.tenantId);
     if (!tenant) {
       return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Get all pending invites for this tenant
-    const invites = await Invite.find({ 
-      tenant: tenant._id, 
-      status: 'Pending',
-      expires: { $gt: new Date() } 
-    }).sort({ createdAt: -1 });
+    // Check note limits for Free plan
+    if (tenant.plan === 'Free') {
+      const noteCount = await Note.countDocuments({ tenant: user.tenantId });
+      if (noteCount >= tenant.maxNotes) {
+        return NextResponse.json({ 
+          success: false, 
+          error: `You have reached the limit of ${tenant.maxNotes} notes for the Free plan. Please upgrade to Pro for unlimited notes.` 
+        }, { status: 403 });
+      }
+    }
 
-    console.log('📨 Found', invites.length, 'pending invitations');
-
-    return NextResponse.json({ 
-      success: true, 
-      invites: invites.map(invite => ({
-        id: invite._id,
-        email: invite.email,
-        token: invite.token,
-        expires: invite.expires,
-        createdAt: invite.createdAt,
-        status: invite.status
-      })),
-      tenantName: tenant.name
+    const note = await Note.create({
+      title,
+      content,
+      tenant: user.tenantId,
+      author: user.id,
     });
 
+    // Populate the author field before returning
+    const populatedNote = await Note.findById(note._id).populate('author', 'email');
+
+    return NextResponse.json({ success: true, note: populatedNote }, { status: 201 });
   } catch (error) {
-    console.error('Get invites error:', error);
+    console.error('Create note error:', error);
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
   }
 }
