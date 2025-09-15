@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, User as UserIcon, Trash2, Shield, Bell } from 'lucide-react';
+import { Loader2, User as UserIcon, Trash2, Shield } from 'lucide-react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { InviteUserForm } from '@/components/dashboard/InviteUserForm';
 import { useToast } from '@/hooks/use-toast';
@@ -160,7 +160,7 @@ export default function SettingsPage() {
       if (parsedUser.tenant?.slug) {
         if (parsedUser.role === 'Admin') {
           fetchTenantUsers(parsedUser.tenant.slug);
-          fetchUpgradeRequests(parsedUser.tenant.slug);
+          
         }
         fetchNotesCount(parsedUser.id);
       }
@@ -287,36 +287,7 @@ export default function SettingsPage() {
 
         {currentUser.role === 'Admin' && currentUser.tenant?.slug && (
           <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Bell className="h-5 w-5" />
-                  <span>Upgrade Requests</span>
-                </CardTitle>
-                <CardDescription>Approve or reject upgrade requests from your team members.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {upgradeRequests.length === 0 ? (
-                  <p className="text-gray-500">No pending upgrade requests.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {upgradeRequests.map((request) => (
-                      <div key={request._id} className="flex items-center justify-between p-2 border rounded-md">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{request.user.email}</span>
-                          <span className="text-sm text-gray-500">Requested on {new Date(request.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <Button onClick={() => handleApproveRequest(request)} disabled={submitting}>
-                          {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Approve'}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Separator />
+            
 
             <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} onInviteSuccess={() => fetchTenantUsers(currentUser.tenant.slug)} />
 
