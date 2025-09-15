@@ -13,10 +13,7 @@ This application uses a **shared schema with tenant ID column** approach for mul
 - **Benefits**: Cost-effective, easier maintenance, and simpler deployment
 - **Trade-offs**: Requires careful implementation to ensure data isolation
 
-## Architecture
 
-### Multi-Tenancy Approach
-This application uses a **shared schema with a tenant ID column** approach for multi-tenancy. Each record in the database has a `tenantId` field to ensure data isolation.
 
 ### Technology Stack
 - **Frontend**: Next.js 13+ with TypeScript, Tailwind CSS, shadcn/ui
