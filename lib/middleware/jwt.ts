@@ -8,7 +8,7 @@ interface JWTPayload {
   role: 'Admin' | 'Member';
   tenantId: string;
   tenantSlug: string;
-  tenantPlan: 'Free' | 'Pro';
+  plan: 'Free' | 'Pro';
 }
 
 export interface AuthenticatedRequest extends NextRequest {

@@ -3,7 +3,7 @@ require('dotenv').config({ path: '.env.local' });
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-import { User, Tenant, Note, Invite } from '../models';
+import { User, Tenant, Note, Invite, UpgradeRequest } from '../models';
 import crypto from 'crypto';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/notesflow';
@@ -20,100 +20,104 @@ async function seed() {
     Tenant.deleteMany({}),
     User.deleteMany({}),
     Note.deleteMany({}),
-    Invite.deleteMany({})
+    Invite.deleteMany({}),
+    UpgradeRequest.deleteMany({}),
   ]);
   console.log('✅ Existing data cleared.');
 
   console.log('🏢 Creating tenants...');
   const tenants = await Tenant.create([
-    { 
-      name: 'Acme Corporation', 
-      slug: 'acme', 
-      plan: 'Free',
-      maxNotes: 3
-    },
-    { 
-      name: 'Globex Industries', 
-      slug: 'globex', 
-      plan: 'Pro',
-      maxNotes: 1000000
-    },
+    { name: 'Acme Corporation', slug: 'acme' },
+    { name: 'Globex Industries', slug: 'globex' },
   ]);
   
   const [acmeTenant, globexTenant] = tenants;
   console.log('✅ Tenants created.');
 
   console.log('👥 Creating users...');
-  const password = await bcrypt.hash('password', 12); // Changed to 'password' as per requirements
+  const password = await bcrypt.hash('password', 12);
 
-  // Create admin@acme.test as the main admin
-  const adminAcme = await User.create({ 
-    email: 'admin@acme.test', 
-    role: 'Admin', 
-    tenant: acmeTenant._id, 
-    password 
+  // Acme Users
+  const adminAcme = await User.create({
+    email: 'admin@acme.test',
+    role: 'Admin',
+    tenant: acmeTenant._id,
+    password,
+    plan: 'Pro',
   });
 
-  // Create user@acme.test as a regular member under admin@acme.test's tenant
-  const userAcme = await User.create({ 
-    email: 'user@acme.test', 
-    role: 'Member', 
-    tenant: acmeTenant._id, 
-    password 
+  const userAcme = await User.create({
+    email: 'user@acme.test',
+    role: 'Member',
+    tenant: acmeTenant._id,
+    password,
+    plan: 'Free',
   });
 
-  // Additional members for Acme
-  const johnAcme = await User.create({ 
-    email: 'john@acme.test', 
-    role: 'Member', 
-    tenant: acmeTenant._id, 
-    password 
+  const johnAcme = await User.create({
+    email: 'john@acme.test',
+    role: 'Member',
+    tenant: acmeTenant._id,
+    password,
+    plan: 'Free',
   });
 
-  const sarahAcme = await User.create({ 
-    email: 'sarah@acme.test', 
-    role: 'Member', 
-    tenant: acmeTenant._id, 
-    password 
+  const sarahAcme = await User.create({
+    email: 'sarah@acme.test',
+    role: 'Member',
+    tenant: acmeTenant._id,
+    password,
+    plan: 'Pro',
   });
   
-  // Globex users  
-  const adminGlobex = await User.create({ 
-    email: 'admin@globex.test', 
-    role: 'Admin', 
-    tenant: globexTenant._id, 
-    password 
+  // Globex Users
+  const adminGlobex = await User.create({
+    email: 'admin@globex.test',
+    role: 'Admin',
+    tenant: globexTenant._id,
+    password,
+    plan: 'Pro',
   });
 
-  const userGlobex = await User.create({ 
-    email: 'user@globex.test', 
-    role: 'Member', 
-    tenant: globexTenant._id, 
-    password 
+  const userGlobex = await User.create({
+    email: 'user@globex.test',
+    role: 'Member',
+    tenant: globexTenant._id,
+    password,
+    plan: 'Free',
   });
 
   console.log('✅ Users created.');
-  console.log(`   • Admin for Acme: ${adminAcme.email}`);
-  console.log(`   • Users under Acme admin: ${userAcme.email}, ${johnAcme.email}, ${sarahAcme.email}`);
-  console.log(`   • Admin for Globex: ${adminGlobex.email}`);
-  console.log(`   • Users under Globex admin: ${userGlobex.email}`);
+  console.log(`   • Admin for Acme: ${adminAcme.email} (Pro)`);
+  console.log(`   • Users under Acme admin: ${userAcme.email} (Free), ${johnAcme.email} (Free), ${sarahAcme.email} (Pro)`);
+  console.log(`   • Admin for Globex: ${adminGlobex.email} (Pro)`);
+  console.log(`   • Users under Globex admin: ${userGlobex.email} (Free)`);
 
   console.log('📝 Creating sample notes...');
   await Note.create([
-    // Notes created by Acme members (not admin, since admins can't create notes)
-    
-    // Globex notes (created by member, not admin)
-    { 
-      title: 'Globex Strategic Vision 2024', 
-      content: 'Our strategic vision for 2024 includes expanding into new markets and developing innovative solutions.', 
-      tenant: globexTenant._id, 
-      author: userGlobex._id 
+    {
+      title: 'Acme Note 1 by user@acme.test',
+      content: 'This is a note for Acme.',
+      tenant: acmeTenant._id,
+      author: userAcme._id
     },
-    { 
-      title: 'Technical Architecture Notes', 
-      content: 'System architecture considerations:\n- Microservices approach\n- Cloud-native deployment\n- Scalability requirements', 
-      tenant: globexTenant._id, 
-      author: userGlobex._id 
+    {
+      title: 'Acme Note 2 by user@acme.test',
+      content: 'This is another note for Acme.',
+      tenant: acmeTenant._id,
+      author: userAcme._id
+    },
+    {
+      title: 'Acme Note 3 by user@acme.test',
+      content: 'This is a third note for Acme.',
+      tenant: acmeTenant._id,
+      author: userAcme._id
+    },
+    {
+      title: 'Globex Strategic Vision 2024',
+      content: 'Our strategic vision for 2024 includes expanding into new markets and developing innovative solutions.',
+      tenant: globexTenant._id,
+      author: userGlobex._id
     },
   ]);
   console.log('✅ Sample notes created.');
@@ -150,15 +154,15 @@ async function seed() {
   console.log(`   • ${invitations.length} pending invitations created`);
   
   console.log('\n🔐 Test Accounts:');
-  console.log('   Acme Corporation (Free Plan - 3 note limit):');
-  console.log('   • admin@acme.test / password (Admin - manages users, cannot create notes)');
-  console.log('   • user@acme.test / password (Member - can create notes)');
-  console.log('   • john@acme.test / password (Member - can create notes)');
-  console.log('   • sarah@acme.test / password (Member - can create notes)');
+  console.log('   Acme Corporation:');
+  console.log('   • admin@acme.test / password (Admin, Pro)');
+  console.log('   • user@acme.test / password (Member, Free, 3 note limit)');
+  console.log('   • john@acme.test / password (Member, Free, 3 note limit)');
+  console.log('   • sarah@acme.test / password (Member, Pro)');
   
-  console.log('\n   Globex Industries (Pro Plan - unlimited notes):');
-  console.log('   • admin@globex.test / password (Admin - manages users, cannot create notes)');
-  console.log('   • user@globex.test / password (Member - can create notes)');
+  console.log('\n   Globex Industries:');
+  console.log('   • admin@globex.test / password (Admin, Pro)');
+  console.log('   • user@globex.test / password (Member, Free, 3 note limit)');
   
   console.log('\n🔗 Test Invitation Links:');
   invitations.forEach((invite, index) => {
@@ -168,13 +172,12 @@ async function seed() {
   
   console.log('\n✨ Ready to test!');
   console.log('📋 Testing Workflow:');
-  console.log('1. Login as admin@acme.test to manage users and tenant plan');
-  console.log('2. Admin can downgrade to Free plan to test note limits');
-  console.log('3. Create an invite for a new user (e.g., test@example.com)');
-  console.log('4. Use the generated invite link to sign up the new user');
-  console.log('5. Login as user@acme.test to create and manage notes');
-  console.log('6. If on Free plan, try creating more than 3 notes to test limits');
-  console.log('7. Admin can upgrade back to Pro plan for unlimited notes');
+  console.log('1. Login as admin@acme.test to manage users.');
+  console.log('2. Change plans for users in the Team Members section.');
+  console.log('3. Login as a Free user (e.g., user@acme.test).');
+  console.log('4. Try to create more than 3 notes to test the limit.');
+  console.log('5. See the "Upgrade to Pro" message and request an upgrade.');
+  console.log('6. Login as admin@acme.test to see the upgrade request and approve it.');
 
   await mongoose.connection.close();
   console.log('✅ Database connection closed.');

@@ -5,28 +5,26 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, User as UserIcon, Trash2, Crown, Shield } from 'lucide-react';
+import { Loader2, User as UserIcon, Trash2, Shield, Bell } from 'lucide-react';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { InviteUserForm } from '@/components/dashboard/InviteUserForm';
 import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
+import { UserPlanForm } from '@/components/dashboard/UserPlanForm';
 
 interface User {
   id: string;
   email: string;
   name?: string;
   role: 'Admin' | 'Member';
+  plan: 'Free' | 'Pro';
   tenant: {
     _id: string;
     name: string;
     slug: string;
-    plan: 'Free' | 'Pro';
   };
 }
 
@@ -39,15 +37,27 @@ interface TenantUser {
   updatedAt: string;
 }
 
+interface UpgradeRequest {
+  _id: string;
+  user: {
+    _id: string;
+    email: string;
+    name?: string;
+  };
+  tenant: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
+  const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [notesCount, setNotesCount] = useState<number | null>(null);
-  
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -82,8 +92,6 @@ export default function SettingsPage() {
     }
   }, [getAuthHeaders, toast]);
 
-  
-
   const fetchTenantUsers = useCallback(async (tenantSlug: string) => {
     setLoading(true);
     try {
@@ -112,6 +120,31 @@ export default function SettingsPage() {
     }
   }, [getAuthHeaders, toast]);
 
+  const fetchUpgradeRequests = useCallback(async (tenantSlug: string) => {
+    try {
+      const response = await fetch(`/api/tenants/${tenantSlug}/upgrade-requests`, {
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setUpgradeRequests(data.requests);
+      } else {
+        toast({
+          title: "Error fetching upgrade requests",
+          description: data.error || "Failed to load upgrade requests.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching upgrade requests:", error);
+      toast({
+        title: "Connection Error",
+        description: "Could not connect to the server to fetch upgrade requests.",
+        variant: "destructive",
+      });
+    }
+  }, [getAuthHeaders, toast]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
@@ -124,63 +157,18 @@ export default function SettingsPage() {
     try {
       const parsedUser = JSON.parse(userData) as User;
       setCurrentUser(parsedUser);
-      if (parsedUser.tenant?.slug && parsedUser.role === 'Admin') {
-        fetchTenantUsers(parsedUser.tenant.slug);
-      }
-      if (parsedUser.id) {
+      if (parsedUser.tenant?.slug) {
+        if (parsedUser.role === 'Admin') {
+          fetchTenantUsers(parsedUser.tenant.slug);
+          fetchUpgradeRequests(parsedUser.tenant.slug);
+        }
         fetchNotesCount(parsedUser.id);
       }
     } catch (err) {
       console.error('Error parsing user data:', err);
       router.push('/login');
     }
-  }, [router, fetchTenantUsers]);
-
-  const handleRoleChange = async (userId: string, newRole: 'Admin' | 'Member') => {
-    if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
-
-    if (currentUser.id === userId) {
-      toast({
-        title: "Permission Denied",
-        description: "You cannot change your own role.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await fetch(`/api/tenants/${currentUser.tenant.slug}/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ role: newRole }),
-      });
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        toast({
-          title: "Role updated successfully",
-          description: `${data.user.email}&apos;s role has been changed to ${newRole}.`,
-        });
-        fetchTenantUsers(currentUser.tenant.slug);
-      } else {
-        toast({
-          title: "Failed to update role",
-          description: data.error || "An unexpected error occurred.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error updating user role:", error);
-      toast({
-        title: "Connection Error",
-        description: "Could not connect to the server to update role.",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  }, [router, fetchTenantUsers, fetchUpgradeRequests, fetchNotesCount]);
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
     if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
@@ -218,44 +206,68 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUserPlanChange = async (userId: string, newPlan: 'Free' | 'Pro') => {
-    if (!currentUser || currentUser.role !== 'Admin' || !currentUser.tenant?.slug) return;
+  const handlePlanChangeSuccess = (userId: string, newPlan: 'Free' | 'Pro') => {
+    setTenantUsers(prevUsers =>
+      prevUsers.map(user =>
+        user.id === userId ? { ...user, plan: newPlan } : user
+      )
+    );
+    if (userId === currentUser?.id) {
+      const updatedUser = { ...currentUser, plan: newPlan };
+      setCurrentUser(updatedUser as User);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
+  const handleApproveRequest = async (request: UpgradeRequest) => {
+    if (!currentUser || !currentUser.tenant?.slug) return;
 
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/tenants/${currentUser.tenant.slug}/users/${userId}/plan`, {
+      // 1. Update user's plan
+      const planResponse = await fetch(`/api/tenants/${currentUser.tenant.slug}/users/${request.user._id}/plan`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ plan: newPlan }),
+        body: JSON.stringify({ plan: 'Pro' }),
       });
-      const data = await response.json();
+      const planData = await planResponse.json();
 
-      if (response.ok && data.success) {
-        toast({
-          title: "User plan updated successfully",
-          description: `${data.user.email}'s plan has been changed to ${newPlan}.`,
-        });
-        fetchTenantUsers(currentUser.tenant.slug);
-      } else {
-        toast({
-          title: "Failed to update user plan",
-          description: data.error || "An unexpected error occurred.",
-          variant: "destructive",
-        });
+      if (!planResponse.ok) {
+        throw new Error(planData.error || 'Failed to update user plan.');
       }
-    } catch (error) {
-      console.error("Error updating user plan:", error);
+
+      // 2. Update request status
+      const requestResponse = await fetch(`/api/upgrade-requests/${request._id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      const requestData = await requestResponse.json();
+
+      if (!requestResponse.ok) {
+        throw new Error(requestData.error || 'Failed to update request status.');
+      }
+
       toast({
-        title: "Connection Error",
-        description: "Could not connect to the server to update user plan.",
+        title: "Upgrade Approved",
+        description: `${request.user.email}'s plan has been upgraded to Pro.`,
+      });
+
+      // 3. Refresh data
+      fetchUpgradeRequests(currentUser.tenant.slug);
+      fetchTenantUsers(currentUser.tenant.slug);
+
+    } catch (error: any) {
+      console.error("Error approving request:", error);
+      toast({
+        title: "Failed to approve request",
+        description: error.message || "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
       setSubmitting(false);
     }
   };
-
-  
 
   if (!currentUser) {
     return (
@@ -273,16 +285,43 @@ export default function SettingsPage() {
           <p className="text-gray-500 mt-1">Manage your organization and user settings</p>
         </div>
 
-        
-
-        {currentUser.role === 'Admin' && (
+        {currentUser.role === 'Admin' && currentUser.tenant?.slug && (
           <>
-            {/* Invite Users */}
-            <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} onInviteSuccess={fetchTenantUsers} />
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Bell className="h-5 w-5" />
+                  <span>Upgrade Requests</span>
+                </CardTitle>
+                <CardDescription>Approve or reject upgrade requests from your team members.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {upgradeRequests.length === 0 ? (
+                  <p className="text-gray-500">No pending upgrade requests.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {upgradeRequests.map((request) => (
+                      <div key={request._id} className="flex items-center justify-between p-2 border rounded-md">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{request.user.email}</span>
+                          <span className="text-sm text-gray-500">Requested on {new Date(request.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <Button onClick={() => handleApproveRequest(request)} disabled={submitting}>
+                          {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Approve'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <Separator />
 
-            {/* Team Members */}
+            <InviteUserForm tenantSlug={currentUser.tenant.slug} getAuthHeaders={getAuthHeaders} onInviteSuccess={() => fetchTenantUsers(currentUser.tenant.slug)} />
+
+            <Separator />
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -300,7 +339,7 @@ export default function SettingsPage() {
                   <p className="text-gray-500">No members found in your organization.</p>
                 ) : (
                   <div className="space-y-4">
-                    {tenantUsers.filter(user => user.id !== currentUser.id).map((user) => (
+                    {tenantUsers.map((user) => (
                       <div key={user.id} className="flex items-center justify-between p-2 border rounded-md">
                         <div className="flex flex-col">
                           <span className="font-medium">{user.email}</span>
@@ -309,22 +348,15 @@ export default function SettingsPage() {
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Select
-                            value={user.plan}
-                            onValueChange={(newPlan: 'Free' | 'Pro') => handleUserPlanChange(user.id, newPlan)}
-                            disabled={submitting}
-                          >
-                            <SelectTrigger className="w-[120px]">
-                              <SelectValue placeholder="Select plan" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Free">Free</SelectItem>
-                              <SelectItem value="Pro">Pro</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <UserPlanForm
+                            userId={user.id}
+                            currentPlan={user.plan}
+                            tenantSlug={currentUser.tenant.slug}
+                            onPlanChange={handlePlanChangeSuccess}
+                          />
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="icon">
+                              <Button variant="destructive" size="icon" disabled={submitting}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -357,7 +389,6 @@ export default function SettingsPage() {
           </>
         )}
 
-        {/* Account Information */}
         <Card>
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
@@ -387,8 +418,8 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">Account Plan</Label>
-                <Badge variant={currentUser.tenant.plan === 'Pro' ? 'default' : 'secondary'}>
-                  {currentUser.tenant.plan}
+                <Badge variant={currentUser.plan === 'Pro' ? 'default' : 'secondary'}>
+                  {currentUser.plan}
                 </Badge>
               </div>
             </div>
@@ -397,11 +428,6 @@ export default function SettingsPage() {
 
         <Separator />
 
-        
-
-        <Separator />
-
-        {/* Account Actions */}
         <Card>
           <CardHeader>
             <CardTitle>Account Actions</CardTitle>
@@ -421,5 +447,5 @@ export default function SettingsPage() {
 const handleSignOut = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  window.location.href = '/login'; // Redirect to login page
+  window.location.href = '/login';
 };

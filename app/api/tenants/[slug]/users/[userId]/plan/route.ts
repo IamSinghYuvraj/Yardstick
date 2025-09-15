@@ -1,3 +1,4 @@
+// app/api/tenants/[slug]/users/[userId]/plan/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { User } from '@/models';
 import { requireAdmin } from '@/lib/middleware/jwt';
@@ -24,28 +25,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { slug: 
       return NextResponse.json({ success: false, error: 'Invalid plan specified. Must be "Free" or "Pro".' }, { status: 400 });
     }
 
-    // Find the user to update
-    const userToUpdate = await User.findOne({ 
-      _id: params.userId, 
-      tenant: adminUser.tenantId 
-    });
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: params.userId, tenant: adminUser.tenantId },
+      { $set: { plan: plan } },
+      { new: true }
+    );
 
-    if (!userToUpdate) {
+    if (!updatedUser) {
       return NextResponse.json({ success: false, error: 'User not found in this tenant' }, { status: 404 });
     }
-
-    // Update the user's plan
-    userToUpdate.tenant.plan = plan;
-    await userToUpdate.save();
 
     return NextResponse.json({ 
       success: true, 
       user: {
-        id: userToUpdate._id.toString(),
-        email: userToUpdate.email,
-        role: userToUpdate.role,
-        plan: userToUpdate.tenant.plan,
-        updatedAt: userToUpdate.updatedAt
+        id: updatedUser._id.toString(),
+        email: updatedUser.email,
+        role: updatedUser.role,
+        plan: updatedUser.plan,
+        updatedAt: updatedUser.updatedAt
       }
     });
 

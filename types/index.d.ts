@@ -1,12 +1,10 @@
-// types/index.ts
+// types/index.d.ts
 import { Document, Types } from 'mongoose';
 
 export interface ITenant extends Document {
   _id: Types.ObjectId;
   name: string;
   slug: string;
-  plan: 'Free' | 'Pro';
-  maxNotes: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,6 +14,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: 'Admin' | 'Member';
+  plan: 'Free' | 'Pro';
   tenant: Types.ObjectId | ITenant;
   createdAt: Date;
   updatedAt: Date;

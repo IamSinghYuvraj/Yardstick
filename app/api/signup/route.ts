@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       role: newUser.role,
       tenantId: newUser.tenant.toString(),
       tenantSlug: tenant.slug,
-      tenantPlan: tenant.plan
+      plan: newUser.plan
     };
 
     const loginToken = jwt.sign(loginPayload, process.env.JWT_SECRET || 'fallback-secret', {
@@ -109,11 +109,11 @@ export async function POST(request: NextRequest) {
         id: newUser._id.toString(),
         email: newUser.email,
         role: newUser.role,
+        plan: newUser.plan,
         tenant: {
           _id: tenant._id.toString(),
           name: tenant.name,
           slug: tenant.slug,
-          plan: tenant.plan
         }
       }
     });

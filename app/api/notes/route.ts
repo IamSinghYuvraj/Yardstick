@@ -1,6 +1,6 @@
 // app/api/notes/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { Note, Tenant } from '@/models';
+import { Note } from '@/models';
 import { requireAuth } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     const notes = await Note.find(query)
-      .populate('author', 'email')
+      .populate('author', 'email name')
       .sort({ updatedAt: -1 });
 
     return NextResponse.json({ success: true, notes });
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new note (Members only, not Admins)
+// POST - Create a new note
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
@@ -46,34 +46,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { user } = authResult;
-
-    // Only Members can create notes, not Admins
-    if (user.role === 'Admin') {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Administrators cannot create notes. Only members can create notes.' 
-      }, { status: 403 });
-    }
-
     const { title, content } = await request.json();
 
     if (!title || !content) {
       return NextResponse.json({ success: false, error: 'Title and content are required' }, { status: 400 });
     }
 
-    // Get the tenant to check plan limits
-    const tenant = await Tenant.findById(user.tenantId);
-    if (!tenant) {
-      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 });
-    }
-
     // Check note limits for Free plan
-    if (tenant.plan === 'Free') {
-      const noteCount = await Note.countDocuments({ tenant: user.tenantId });
-      if (noteCount >= tenant.maxNotes) {
+    if (user.plan === 'Free') {
+      const noteCount = await Note.countDocuments({ author: user.id });
+      if (noteCount >= 3) { // Assuming max 3 notes for free plan
         return NextResponse.json({ 
           success: false, 
-          error: `You have reached the limit of ${tenant.maxNotes} notes for the Free plan. Please upgrade to Pro for unlimited notes.` 
+          error: `You have reached the limit of 3 notes for the Free plan. Please upgrade to Pro for unlimited notes.` 
         }, { status: 403 });
       }
     }
@@ -86,7 +71,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Populate the author field before returning
-    const populatedNote = await Note.findById(note._id).populate('author', 'email');
+    const populatedNote = await Note.findById(note._id).populate('author', 'email name');
 
     return NextResponse.json({ success: true, note: populatedNote }, { status: 201 });
   } catch (error) {

@@ -1,11 +1,9 @@
-// app/api/tenants/[slug]/users/route.ts
+// app/api/tenants/[slug]/upgrade-requests/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-import { User } from '@/models';
+import { UpgradeRequest } from '@/models';
 import { requireAdmin } from '@/lib/middleware/jwt';
 import dbConnect from '@/lib/mongodb';
 
-// Get all users in the tenant (Admin only)
 export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
   try {
     await dbConnect();
@@ -16,31 +14,18 @@ export async function GET(request: NextRequest, { params }: { params: { slug: st
     }
 
     const { user: adminUser } = authResult;
-    
+
     if (adminUser.tenantSlug !== params.slug) {
       return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
     }
 
-    // Get all users in the tenant
-    const users = await User.find({ tenant: new mongoose.Types.ObjectId(adminUser.tenantId) })
-      .select('-password') // Exclude password field
-      .sort({ createdAt: -1 });
+    const requests = await UpgradeRequest.find({ tenant: adminUser.tenantId, status: 'pending' })
+      .populate('user', 'email name');
 
-    return NextResponse.json({ 
-      success: true, 
-      users: users.map(user => ({
-        id: user._id.toString(),
-        email: user.email,
-        
-        role: user.role,
-        plan: user.plan,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      }))
-    });
+    return NextResponse.json({ success: true, requests });
 
   } catch (error) {
-    console.error('Get tenant users error:', error);
+    console.error('Get upgrade requests error:', error);
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
   }
 }

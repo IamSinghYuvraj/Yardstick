@@ -1,12 +1,10 @@
 // models/index.ts
 import mongoose, { Schema, models } from 'mongoose';
-import { ITenant, IUser, INote, IInvite } from '../types/index';
+import { ITenant, IUser, INote, IInvite, IUpgradeRequest } from '../types/index';
 
 const TenantSchema: Schema = new Schema({
   name: { type: String, required: true, unique: true },
   slug: { type: String, required: true, unique: true },
-  plan: { type: String, enum: ['Free', 'Pro'], default: 'Free' },
-  maxNotes: { type: Number, default: 3 },
 }, { timestamps: true });
 
 export const Tenant = models.Tenant || mongoose.model<ITenant>('Tenant', TenantSchema);
@@ -16,6 +14,7 @@ const UserSchema: Schema = new Schema({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ['Admin', 'Member'], required: true },
   tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
+  plan: { type: String, enum: ['Free', 'Pro'], default: 'Free' },
 }, { timestamps: true });
 
 export const User = models.User || mongoose.model<IUser>('User', UserSchema);
@@ -44,3 +43,4 @@ InviteSchema.index({ email: 1, tenant: 1, status: 1 }, {
 });
 
 export const Invite = models.Invite || mongoose.model<IInvite>('Invite', InviteSchema);
+

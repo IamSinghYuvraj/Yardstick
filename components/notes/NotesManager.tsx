@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Search, Edit, Trash2, FileText, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-
+import { useToast } from '@/hooks/use-toast';
 
 // Define types for Note and User based on your models and session structure
 interface Author {
@@ -36,31 +36,18 @@ interface SessionUser {
   email: string;
   name?: string;
   role: 'Admin' | 'Member';
+  plan: 'Free' | 'Pro';
   tenant: {
     _id: string;
     name: string;
     slug: string;
-    plan: 'Free' | 'Pro';
   };
 }
 
 export function NotesManager() {
-  // Since next-auth is removed, we're providing a mock user for compilation and UI rendering.
-  // In a real application, this 'user' object would come from your actual authentication system.
-  const user: SessionUser | undefined = {
-    id: 'mock-user-id',
-    email: 'mock@example.com',
-    name: 'Mock User',
-    role: 'Admin', // Or 'Member' depending on desired default behavior
-    tenant: {
-      _id: 'mock-tenant-id',
-      name: 'Mock Tenant',
-      slug: 'mock-tenant',
-      plan: 'Pro', // Or 'Free' depending on desired default behavior
-    },
-  };
   const router = useRouter();
-
+  const { toast } = useToast();
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -70,18 +57,20 @@ export function NotesManager() {
   const [loading, setLoading] = useState(false);
   const [notesLoading, setNotesLoading] = useState(true);
   const [showUpgradeAlert, setShowUpgradeAlert] = useState(false);
+  const [upgradeRequestStatus, setUpgradeRequestStatus] = useState(''); // '', 'loading', 'sent'
 
-  useEffect(() => {
-    // Since next-auth is removed, we assume notes should load on component mount
-    // or user will be provided by another mechanism.
-    // For now, we'll just load notes directly.
-    loadNotes();
-  }, []); // Empty dependency array means it runs once on mount
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+  }, []);
 
-  const loadNotes = async () => {
+  const loadNotes = useCallback(async () => {
     setNotesLoading(true);
     try {
-      const response = await fetch('/api/notes');
+      const response = await fetch('/api/notes', { headers: getAuthHeaders() });
       const data = await response.json();
 
       if (response.ok && data.success) {
@@ -95,12 +84,87 @@ export function NotesManager() {
     } finally {
       setNotesLoading(false);
     }
-  };
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'user') {
+        const userData = event.newValue;
+        if (userData) {
+          const parsedUser = JSON.parse(userData);
+          setUser(parsedUser);
+          if (parsedUser.plan !== user?.plan) {
+            loadNotes();
+          }
+        } else {
+          router.push('/login');
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [router, user, loadNotes]);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+      loadNotes();
+    } else {
+      router.push('/login');
+    }
+  }, [router, loadNotes]);
 
   const filteredNotes = notes.filter(note =>
     note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     note.content.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleNewNoteClick = () => {
+    if (user?.plan === 'Free' && notes.length >= 3) {
+      setShowUpgradeAlert(true);
+      setError('You have reached the note limit for the Free plan.');
+    } else {
+      setIsCreateDialogOpen(true);
+    }
+  };
+
+  const handleRequestUpgrade = async () => {
+    setUpgradeRequestStatus('loading');
+    try {
+      const response = await fetch('/api/users/request-upgrade', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setUpgradeRequestStatus('sent');
+        toast({
+          title: 'Request Sent',
+          description: 'Your request to upgrade to the Pro plan has been sent to the admin.',
+        });
+      } else {
+        setUpgradeRequestStatus('');
+        toast({
+          title: 'Failed to send request',
+          description: data.error || 'An unexpected error occurred.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      setUpgradeRequestStatus('');
+      console.error('Error requesting upgrade:', error);
+      toast({
+        title: 'Connection Error',
+        description: 'Could not connect to the server to request an upgrade.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,18 +180,14 @@ export function NotesManager() {
         // Update existing note
         response = await fetch(`/api/notes/${editingNote._id}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify(formData),
         });
       } else {
         // Create new note
         response = await fetch('/api/notes', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify(formData),
         });
       }
@@ -144,7 +204,7 @@ export function NotesManager() {
         setEditingNote(null);
       } else if (response.status === 403) {
         setError(data.error || 'Note limit reached.');
-        if (user?.tenant.plan === 'Free') {
+        if (user?.plan === 'Free') {
           setShowUpgradeAlert(true);
         }
       } else {
@@ -170,6 +230,7 @@ export function NotesManager() {
     try {
       const response = await fetch(`/api/notes/${noteId}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       const data = await response.json();
 
@@ -193,7 +254,7 @@ export function NotesManager() {
     setShowUpgradeAlert(false);
   };
 
-  if (notesLoading || !user) { // Removed status === 'loading' as next-auth is not used
+  if (notesLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex items-center space-x-2 text-gray-500">
@@ -212,15 +273,15 @@ export function NotesManager() {
           <h1 className="text-3xl font-bold text-gray-900">Notes</h1>
           <p className="text-gray-500 mt-1">Manage your notes and ideas</p>
         </div>
-        <Dialog 
-          open={isCreateDialogOpen} 
+        <Dialog
+          open={isCreateDialogOpen}
           onOpenChange={(open) => {
             setIsCreateDialogOpen(open);
             if (!open) resetForm();
           }}
         >
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleNewNoteClick} className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
               New Note
             </Button>
@@ -244,14 +305,14 @@ export function NotesManager() {
                 <Alert variant="destructive" className="mt-4">
                   <AlertDescription className="flex items-center justify-between">
                     <span>{error}</span>
-                    {user?.role === 'Admin' && (
-                      <Button
-                        size="sm"
-                        onClick={() => router.push('/dashboard/settings')}
-                      >
-                        Upgrade to Pro
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      onClick={handleRequestUpgrade}
+                      disabled={upgradeRequestStatus === 'loading' || upgradeRequestStatus === 'sent'}
+                    >
+                      {upgradeRequestStatus === 'loading' && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      {upgradeRequestStatus === 'sent' ? 'Request Sent' : 'Upgrade to Pro'}
+                    </Button>
                   </AlertDescription>
                 </Alert>
               )}
@@ -280,9 +341,9 @@ export function NotesManager() {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setIsCreateDialogOpen(false)}
                 >
                   Cancel
@@ -302,6 +363,23 @@ export function NotesManager() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {showUpgradeAlert && user?.plan === 'Free' && (
+        <Alert variant="default" className="mt-4 bg-yellow-100 border-yellow-400">
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-yellow-800">You've reached your note limit. Upgrade to Pro for unlimited notes.</span>
+            <Button
+              size="sm"
+              onClick={handleRequestUpgrade}
+              disabled={upgradeRequestStatus === 'loading' || upgradeRequestStatus === 'sent'}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white"
+            >
+              {upgradeRequestStatus === 'loading' && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {upgradeRequestStatus === 'sent' ? 'Request Sent' : 'Request Upgrade'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -323,13 +401,13 @@ export function NotesManager() {
               {searchTerm ? 'No notes found' : 'No notes yet'}
             </h3>
             <p className="text-gray-500 mb-4">
-              {searchTerm 
+              {searchTerm
                 ? 'Try adjusting your search terms'
                 : 'Create your first note to get started'
               }
             </p>
             {!searchTerm && (
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Button onClick={handleNewNoteClick}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Note
               </Button>

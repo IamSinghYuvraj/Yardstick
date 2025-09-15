@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       tenantId: user.tenant._id.toString(),
       tenantSlug: user.tenant.slug,
-      tenantPlan: user.tenant.plan
+      plan: user.plan
     };
 
     // Sign JWT token
@@ -62,11 +62,11 @@ export async function POST(request: NextRequest) {
         email: user.email,
         
         role: user.role,
+        plan: user.plan,
         tenant: {
           _id: user.tenant._id.toString(),
           name: user.tenant.name,
           slug: user.tenant.slug,
-          plan: user.tenant.plan
         }
       }
     });
