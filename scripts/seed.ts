@@ -2,7 +2,7 @@
 require('dotenv').config({ path: '.env.local' });
 
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { User, Tenant, Note, Invite, UpgradeRequest } from '../models';
 import crypto from 'crypto';
 

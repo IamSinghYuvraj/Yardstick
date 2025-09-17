@@ -1,6 +1,6 @@
 // app/api/signup/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/mongodb';
 import { User, Invite, Tenant } from '@/models';

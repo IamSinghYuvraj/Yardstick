@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb';
 import { User } from '@/models';
 import { verifyAuthToken } from '@/lib/token';
 import { JwtPayload } from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   await dbConnect();
